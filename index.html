@@ -2,68 +2,84 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <title>AI 生態缸：物質重構實驗</title>
+    <title>AI 生態缸：次元崩解實驗</title>
     <style>
         :root {
-            --primary: #00f2fe; --accent: #4facfe;
-            --radius: 50%; --morph: 30% 70% 70% 30% / 30% 30% 70% 70%;
-            --blur: 10px; --rotation: 0deg;
+            --primary-hue: 190;
+            --glitch-intensity: 0px;
+            --sphere-scale: 1;
+            --bg-texture: radial-gradient(circle at center, #101015 0%, #000 100%);
         }
-        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        body { 
+            margin: 0; background: var(--bg-texture); color: #fff; 
+            font-family: sans-serif; display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; height: 100vh; 
+            overflow: hidden; transition: background 1s;
+        }
 
-        /* 核心生態缸：多層濾鏡疊加產生液態感 */
-        .stage { position: relative; filter: contrast(20) hue-rotate(var(--rotation)); }
+        /* 全螢幕故障濾鏡 (Intense Stimulus) */
+        .glitch-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: transparent; pointer-events: none; z-index: 999;
+            box-shadow: inset 0 0 var(--glitch-intensity) hsl(var(--primary-hue), 100%, 50%);
+            mix-blend-mode: exclusion;
+        }
+
+        /* 核心舞台 */
+        .stage { position: relative; transform: scale(var(--sphere-scale)); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         
+        /* 語意主體 (液態金屬 + 變形) */
         #eco-sphere {
-            width: 300px; height: 300px;
-            background: var(--primary);
-            border-radius: var(--morph);
-            filter: blur(var(--blur));
-            box-shadow: 0 0 50px var(--accent);
-            transition: all 2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            animation: rotate 20s infinite linear;
+            width: 280px; height: 280px;
+            background: hsl(var(--primary-hue), 100%, 60%);
+            border-radius: 50%;
+            filter: blur(10px) contrast(25);
+            box-shadow: 0 0 40px hsl(var(--primary-hue), 100%, 50%);
+            transition: all 1s ease-in-out;
+            animation: orb-pulse 8s infinite alternate;
         }
 
-        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes orb-pulse { 0% { border-radius: 40% 60%; } 100% { border-radius: 60% 40%; } }
 
-        /* 裝飾性光環 */
-        .ring {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 350px; height: 350px; border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 50%; pointer-events: none;
+        /* 粒子噴射系統 */
+        .particle {
+            position: absolute; background: hsl(var(--primary-hue), 100%, 70%);
+            border-radius: 50%; opacity: 0; pointer-events: none;
+        }
+        @keyframes particle-explode {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            100% { transform: translate(var(--x), var(--y)) scale(0); opacity: 0; }
         }
 
-        /* 控制台 */
-        .panel { 
-            position: absolute; bottom: 50px; background: rgba(255,255,255,0.1);
-            padding: 20px; border-radius: 20px; backdrop-filter: blur(20px);
-            display: grid; grid-template-columns: repeat(2, 180px); gap: 10px;
-        }
-        input { background: #000; border: 1px solid #444; padding: 10px; color: #fff; border-radius: 8px; }
-        button { grid-column: span 2; padding: 15px; background: #fff; color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        /* 敘事與控制面板 */
+        #narrative { position: absolute; top: 60px; text-align: center; font-size: 1.3em; color: hsl(var(--primary-hue), 100%, 80%); text-shadow: 0 0 10px #000; z-index: 10; width: 80%; }
+        .panel { position: absolute; bottom: 40px; background: rgba(255,255,255,0.08); padding: 15px; border-radius: 15px; backdrop-filter: blur(15px); display: grid; grid-template-columns: repeat(2, 160px); gap: 10px; z-index: 10; border: 1px solid rgba(255,255,255,0.1); }
+        input { background: rgba(0,0,0,0.7); border: 1px solid #333; padding: 12px; color: #fff; border-radius: 8px; font-size: 15px; }
+        input:focus { border-color: hsl(var(--primary-hue), 100%, 70%); }
+        button { grid-column: span 2; padding: 15px; background: #fff; color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.2s; }
+        button:hover { background: hsl(var(--primary-hue), 100%, 80%); transform: scale(1.03); }
 
-        #narrative { position: absolute; top: 80px; width: 400px; text-align: center; font-size: 1.2em; color: var(--primary); }
     </style>
 </head>
 <body>
 
-    <div id="narrative">你好，觀察者。請輸入語意配方，改變物質狀態。</div>
+    <div class="glitch-overlay" id="glitch"></div>
+    <div id="narrative">你好，觀察者。請輸入語意配方，準備迎接次元重構。</div>
 
     <div class="stage">
         <div id="eco-sphere"></div>
     </div>
-    <div class="ring"></div>
 
     <div class="panel">
-        <input type="text" id="t" placeholder="時間">
-        <input type="text" id="p" placeholder="人物">
-        <input type="text" id="l" placeholder="地點">
-        <input type="text" id="e" placeholder="事件">
-        <button onclick="transform()">🧪 啟動物質重構</button>
+        <input type="text" id="t" placeholder="什麼時候？">
+        <input type="text" id="p" placeholder="誰？">
+        <input type="text" id="l" placeholder="在哪裡？">
+        <input type="text" id="e" placeholder="做什麼？">
+        <button onclick="dimensionalConstruct()">💥 啟動次元重構</button>
     </div>
 
     <script>
-        function transform() {
+        function dimensionalConstruct() {
             const vals = [
                 document.getElementById('t').value,
                 document.getElementById('p').value,
@@ -71,38 +87,78 @@
                 document.getElementById('e').value
             ];
             const str = vals.join('');
-            if(vals.some(v => !v)) return alert("配方不完整，無法重構物質！");
+            if(vals.some(v => !v)) return; // 結構不完整則不觸發
 
             const sphere = document.getElementById('eco-sphere');
+            const glitch = document.getElementById('glitch');
             const root = document.documentElement;
 
-            // 🧪 語意邏輯：非線性的變異反應
+            // 🧠 AI 語意物理：次元級別的視覺突變
             
-            // 1. 形狀變異 (Morphing)
-            if(str.includes("水") || str.includes("海") || str.includes("跳")) {
-                root.style.setProperty('--morph', "40% 60% 70% 30% / 50% 40% 60% 50%");
-                root.style.setProperty('--blur', "15px");
-            } else if(str.includes("冰") || str.includes("山") || str.includes("坐")) {
-                root.style.setProperty('--morph', "5% 95% 5% 95% / 95% 5% 95% 5%");
-                root.style.setProperty('--blur', "2px");
+            // 1. 強烈視覺：全螢幕故障 (Glitch) 與色彩突變
+            let hue = Math.random() * 360;
+            let glitchInt = "20px";
+            let sphereScale = 1.1;
+
+            if(str.includes("爆炸") || str.includes("打破") || str.includes("吵架")) {
+                hue = 0; // 紅色報警
+                glitchInt = "150px"; // 強烈故障感
+                sphereScale = 1.8; // 球體極度擴張
+                triggerExplosion(); // 觸發粒子噴射
+            } else if(str.includes("太空") || str.includes("黑洞")) {
+                hue = 260; // 深紫色
+                glitchInt = "10px";
+                sphereScale = 0.3; // 球體坍縮
+            } else if(str.includes("電腦") || str.includes("數碼")) {
+                hue = 180; // 青色
+                glitchInt = "80px";
+                sphereScale = 1;
+                sphere.style.filter = "blur(2px) contrast(30) steps(5)"; // 數碼化（像素感）
             } else {
-                root.style.setProperty('--morph', "50% 50% 50% 50% / 50% 50% 50% 50%");
-                root.style.setProperty('--blur', "10px");
+                // 回復正常液態感
+                sphere.style.filter = "blur(10px) contrast(25)";
             }
 
-            // 2. 顏色與維度 (Color & Rotation)
-            let hue = 0;
-            if(str.includes("晚") || str.includes("夜")) hue = 240;
-            else if(str.includes("午") || str.includes("日")) hue = 40;
-            else if(str.includes("森") || str.includes("草")) hue = 100;
-            else hue = Math.random() * 360;
+            // 2. 應用全域變量
+            root.style.setProperty('--primary-hue', hue);
+            root.style.setProperty('--glitch-intensity', glitchInt);
+            root.style.setProperty('--sphere-scale', sphereScale);
 
-            root.style.setProperty('--rotation', `${hue}deg`);
-            root.style.setProperty('--primary', `hsl(${hue}, 100%, 70%)`);
-            root.style.setProperty('--accent', `hsl(${hue}, 100%, 50%)`);
+            // 3. AI 語意共同創作
+            const narrativeBox = document.getElementById('narrative');
+            narrativeBox.innerText = `【次元報告】：偵測到來自「${vals[2]}」的異動。${vals[1]}正在${vals[3]}，導致世界結構不穩定...`;
+            narrativeBox.style.color = `hsl(${hue}, 100%, 80%)`;
 
-            // 3. AI 語意反饋
-            document.getElementById('narrative').innerText = `【物態分析】：偵測到來自「${vals[2]}」的能量。${vals[1]}正在改變這裡的重力...`;
+            // 4. 聲音反饋 (模擬強烈控制感)
+            playSyncSound(glitchInt);
+        }
+
+        // 粒子噴射函數
+        function triggerExplosion() {
+            const stage = document.querySelector('.stage');
+            for(let i=0; i<30; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                const size = Math.random() * 15 + 5 + 'px';
+                p.style.width = size; p.style.height = size;
+                p.style.left = '50%'; p.style.top = '50%';
+                
+                // 隨機噴射路徑
+                const x = (Math.random() - 0.5) * 500 + 'px';
+                const y = (Math.random() - 0.5) * 500 + 'px';
+                p.style.setProperty('--x', x);
+                p.style.setProperty('--y', y);
+                
+                p.style.animation = `particle-explode 1s ease-out forwards`;
+                stage.appendChild(p);
+                setTimeout(() => p.remove(), 1000); // 釋放記憶體
+            }
+        }
+
+        // 模擬視聽同步
+        function playSyncSound(intensity) {
+            // 在實際應用中，這裡會使用 Web Audio API
+            console.log(`播放強烈度為 ${intensity} 的音效...`);
         }
     </script>
 </body>
