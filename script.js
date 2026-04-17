@@ -95,53 +95,53 @@ function speakSentence() {
 
 function startRecognition() {
     if (bgMusic) bgMusic.pause();
-    
-    // 檢查瀏覽器是否支援
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        alert("你的瀏覽器不支援語音功能，請使用 Chrome 瀏覽器。");
-        return;
-    }
+    if (!SpeechRecognition) return alert("瀏覽器不支援語音識別");
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'zh-HK';
     const originalWord = document.getElementById('modal-text').innerText;
     const aiBtn = document.getElementById('ai-btn');
 
-    // 🚩 視覺回饋：按下去立刻變色
-    aiBtn.innerText = "🎤 正在聽...請說話";
-    aiBtn.style.background = "#e53e3e"; // 變成紅色代表正在錄音
+    aiBtn.innerText = "🎤 正在聽...請接龍";
+    aiBtn.style.background = "#e53e3e"; 
 
     recognition.start();
 
     recognition.onresult = (event) => {
         const studentSpeech = event.results[0][0].transcript;
-        console.log("識別結果:", studentSpeech); // 你可以在瀏覽器 F12 看到這行
-
+        
         if (studentSpeech.includes(originalWord)) {
+            // 1. 加分
             players[turn].score += 10;
             document.getElementById('s' + (turn + 1)).innerText = players[turn].score;
 
-            // 更新故事內容
+            // 2. 獲取原本的 AI 開頭文字 (過濾掉 HTML 標籤)
             const starterText = document.getElementById('ai-sentence-text').innerText.replace("故事開始：", "");
+
+            // 3. 【核心改變】將兩者合併並顯示在畫面上，不關閉視窗
             document.getElementById('ai-sentence-text').innerHTML = 
                 `<span style="color: #718096;">${starterText}</span><br>` +
-                `<span style="color: #2b6cb0; font-weight: bold;">你的接龍：${studentSpeech}</span>`;
+                `<span style="color: #2b6cb0; font-weight: bold; font-size: 1.2em;">${studentSpeech}</span>`;
             
-            aiBtn.innerText = "✅ 成功！";
-            aiBtn.style.background = "#48bb78"; // 成功變綠色
-            
-            setTimeout(() => {
-                aiBtn.style.background = "#5d4037"; // 恢復原色
-                aiBtn.innerText = "🎤 AI老師聽讀音";
-                closeModal(true);
-            }, 3000);
+            aiBtn.innerText = "✨ 接龍成功！";
+            aiBtn.style.background = "#48bb78";
+
+            // 4. 修改「我讀好了」按鈕，讓它變成「完成這段創作」
+            const doneBtn = document.getElementById('done-btn');
+            doneBtn.innerText = "🚀 完成這段創作，下一步";
+            doneBtn.style.background = "#3182ce";
+            doneBtn.style.animation = "pulse 1s infinite"; // 加個小動畫提醒學生按
+
         } else {
-            alert(`識別到：「${studentSpeech}」\n請確保句子包含「${originalWord}」`);
+            alert(`接龍裡要包含「${originalWord}」喔！你剛才說的是：「${studentSpeech}」`);
             aiBtn.innerText = "🎤 再試一次";
             aiBtn.style.background = "#5d4037";
         }
     };
+}
+
+// 為了讓按鈕會動，可以在 style.css 加入這個動畫
 
     // 處理錯誤
     recognition.onerror = (event) => {
