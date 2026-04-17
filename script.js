@@ -11,9 +11,7 @@ const storyStarters = {
 const words = ["公園", "老師", "蘋果", "跑步", "快樂", "操場", "森林", "鑰匙", "朋友", "學習", "遊戲", "音樂", "畫畫", "跳繩", "游泳", "禮物", "蛋糕", "星星", "月亮", "太陽", "海洋", "雨傘", "小貓", "小狗"];
 const players = [
     { pos: 0, color: '#e53e3e', score: 0 },
-    { pos: 0, color: '#3182ce', score: 0 },
-    { pos: 0, color: '#38a169', score: 0 },
-    { pos: 0, color: '#d69e2e', score: 0 }
+
 ];
 let turn = 0;
 let timerInterval;
@@ -170,5 +168,5 @@ function closeModal(isCompleted) {
     clearInterval(timerInterval);
     document.getElementById('modal').style.display = 'none';
     if (bgMusic) bgMusic.play();
-    turn = (turn + 1) % 4;
+    turn = (turn + 1) % players.length;
 }
