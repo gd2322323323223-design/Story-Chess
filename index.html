@@ -1,1 +1,49 @@
 
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>詞語大作戰</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="board"></div>
+        <div id="players-info">
+            <div class="player-card p1">Player 1: <span id="s1">0</span></div>
+            <div class="player-card p2">Player 2: <span id="s2">0</span></div>
+            <div class="player-card p3">Player 3: <span id="s3">0</span></div>
+            <div class="player-card p4">Player 4: <span id="s4">0</span></div>
+        </div>
+        <button id="dice-btn" onclick="rollDice()">🎲 擲骰子</button>
+        <div id="dice-result"></div>
+    </div>
+
+    <div id="modal-overlay"></div>
+    <div id="modal">
+        <div id="timer">⏳ 剩餘時間: 120s</div>
+        <div id="modal-text" onclick="speakWord()" style="cursor:pointer;">詞語</div>
+        
+        <div id="ai-sentence-box">
+            <div id="ai-sentence-text">這是一個例句。</div>
+        </div>
+
+        <div class="btn-group">
+            <button onclick="speakWord()" class="blue-btn">讀出詞語 🔊</button>
+            <button onclick="speakSentence()" class="blue-btn">讀出句子 🔊</button>
+        </div>
+
+        <div style="display: flex; gap: 10px; flex-direction: column;">
+            <button onclick="startRecognition()" id="ai-btn">🎤 AI老師聽讀音</button>
+            <button onclick="closeModal(true)" id="done-btn">✅ 我讀好了！</button>
+        </div>
+    </div>
+
+    <audio id="bgMusic" loop>
+        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
+    </audio>
+
+    <script src="script.js"></script>
+</body>
+</html>
