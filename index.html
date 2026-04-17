@@ -2,160 +2,107 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <title>AI 語意生態缸 v2.0</title>
+    <title>AI 生態缸：物質重構實驗</title>
     <style>
-        :root { --hue: 200; --glow: 20px; --speed: 10s; --saturation: 50%; }
-        body { 
-            margin: 0; background: #050508; color: #fff; 
-            font-family: system-ui, -apple-system, sans-serif;
-            display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+        :root {
+            --primary: #00f2fe; --accent: #4facfe;
+            --radius: 50%; --morph: 30% 70% 70% 30% / 30% 30% 70% 70%;
+            --blur: 10px; --rotation: 0deg;
         }
+        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
 
-        /* 生態缸主體：利用 CSS Filter 模擬語意氛圍 */
-        .container { margin-top: 5vh; position: relative; }
+        /* 核心生態缸：多層濾鏡疊加產生液態感 */
+        .stage { position: relative; filter: contrast(20) hue-rotate(var(--rotation)); }
         
         #eco-sphere {
-            width: 380px; height: 380px; border-radius: 50%;
-            background: radial-gradient(circle at 30% 30%, 
-                hsl(var(--hue), var(--saturation), 20%), 
-                hsl(var(--hue), var(--saturation), 5%) 100%);
-            border: 2px solid hsl(var(--hue), 100%, 70%);
-            box-shadow: 0 0 var(--glow) hsl(var(--hue), 100%, 50%);
-            position: relative; overflow: hidden;
-            transition: all 2s cubic-bezier(0.4, 0, 0.2, 1);
-            filter: contrast(1.1) brightness(1.1);
+            width: 300px; height: 300px;
+            background: var(--primary);
+            border-radius: var(--morph);
+            filter: blur(var(--blur));
+            box-shadow: 0 0 50px var(--accent);
+            transition: all 2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            animation: rotate 20s infinite linear;
         }
 
-        /* 模擬語意不穩定的抖動效果 */
-        .unstable { animation: glitch 0.3s infinite; border-color: #ff4757 !important; }
-        @keyframes glitch { 0% { transform: translate(0); } 20% { transform: translate(-5px, 5px); } 40% { transform: translate(-5px, -5px); } 60% { transform: translate(5px, 5px); } 80% { transform: translate(5px, -5px); } 100% { transform: translate(0); } }
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-        /* AI 生命體 */
-        #creature {
-            position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-            width: 60px; height: 60px; background: #fff; border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
-            filter: blur(8px); opacity: 0.8; transition: all 1s;
-            animation: pulse var(--speed) infinite ease-in-out;
+        /* 裝飾性光環 */
+        .ring {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 350px; height: 350px; border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%; pointer-events: none;
         }
 
-        @keyframes pulse { 0%, 100% { transform: translate(-50%, -50%) scale(1); border-radius: 30% 70%; } 50% { transform: translate(-50%, -50%) scale(1.5); border-radius: 50% 50%; } }
+        /* 控制台 */
+        .panel { 
+            position: absolute; bottom: 50px; background: rgba(255,255,255,0.1);
+            padding: 20px; border-radius: 20px; backdrop-filter: blur(20px);
+            display: grid; grid-template-columns: repeat(2, 180px); gap: 10px;
+        }
+        input { background: #000; border: 1px solid #444; padding: 10px; color: #fff; border-radius: 8px; }
+        button { grid-column: span 2; padding: 15px; background: #fff; color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
 
-        /* 敘事面板 */
-        #narrative-box {
-            width: 450px; min-height: 80px; margin-top: 30px;
-            padding: 20px; background: rgba(255,255,255,0.05);
-            border-radius: 15px; border-left: 5px solid hsl(var(--hue), 100%, 50%);
-            font-size: 1.1em; line-height: 1.6; color: #ddd;
-        }
-
-        /* 輸入控制台 */
-        .ui-grid {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 450px; margin-top: 20px;
-        }
-        .input-group { display: flex; flex-direction: column; }
-        label { font-size: 0.8em; color: #666; margin-bottom: 4px; margin-left: 4px; }
-        input { 
-            background: #151520; border: 1px solid #333; padding: 12px; 
-            color: #fff; border-radius: 8px; outline: none; transition: 0.3s;
-        }
-        input:focus { border-color: hsl(var(--hue), 100%, 50%); background: #1a1a2a; }
-        
-        button {
-            grid-column: span 2; margin-top: 10px; padding: 15px;
-            background: hsl(var(--hue), 80%, 40%); border: none; border-radius: 8px;
-            color: #fff; font-weight: bold; cursor: pointer; transition: 0.3s;
-        }
-        button:hover { filter: brightness(1.3); transform: translateY(-2px); }
-
+        #narrative { position: absolute; top: 80px; width: 400px; text-align: center; font-size: 1.2em; color: var(--primary); }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <div id="eco-sphere">
-            <div id="creature"></div>
-        </div>
-    </div>
+    <div id="narrative">你好，觀察者。請輸入語意配方，改變物質狀態。</div>
 
-    <div id="narrative-box">
-        歡迎來到語意實驗室。請在下方注入要素，觀察世界如何成形。
+    <div class="stage">
+        <div id="eco-sphere"></div>
     </div>
+    <div class="ring"></div>
 
-    <div class="ui-grid">
-        <div class="input-group"><label>時間 (Time)</label><input type="text" id="t" placeholder="例如：深夜"></div>
-        <div class="input-group"><label>人物 (Who)</label><input type="text" id="p" placeholder="例如：小機器人"></div>
-        <div class="input-group"><label>地點 (Where)</label><input type="text" id="l" placeholder="例如：在月球上"></div>
-        <div class="input-group"><label>事件 (Event)</label><input type="text" id="e" placeholder="例如：種花"></div>
-        <button onclick="conductExperiment()">🔬 啟動語意實驗</button>
+    <div class="panel">
+        <input type="text" id="t" placeholder="時間">
+        <input type="text" id="p" placeholder="人物">
+        <input type="text" id="l" placeholder="地點">
+        <input type="text" id="e" placeholder="事件">
+        <button onclick="transform()">🧪 啟動物質重構</button>
     </div>
 
     <script>
-        function conductExperiment() {
-            const vals = {
-                t: document.getElementById('t').value,
-                p: document.getElementById('p').value,
-                l: document.getElementById('l').value,
-                e: document.getElementById('e').value
-            };
+        function transform() {
+            const vals = [
+                document.getElementById('t').value,
+                document.getElementById('p').value,
+                document.getElementById('l').value,
+                document.getElementById('e').value
+            ];
+            const str = vals.join('');
+            if(vals.some(v => !v)) return alert("配方不完整，無法重構物質！");
 
             const sphere = document.getElementById('eco-sphere');
-            const box = document.getElementById('narrative-box');
-            const creature = document.getElementById('creature');
+            const root = document.documentElement;
 
-            // 1. 結構完整性實驗：如果少了一個要素，世界會進入「不穩定」狀態
-            if (!vals.t || !vals.p || !vals.l || !vals.e) {
-                sphere.classList.add('unstable');
-                box.innerText = "⚠️ 警告：語意結構支柱缺失，世界正在崩解。請補齊所有要素以維持穩定。";
-                return;
-            }
-            sphere.classList.remove('unstable');
-
-            // 2. 運用 AI 的「情感色彩映射」（模擬）
-            // 我們定義不同詞彙對環境變量的影響
-            let hue = 200; // 預設藍色
-            let saturation = "50%";
-            let glow = "20px";
-            let speed = "10s";
-
-            // 模擬語意分析邏輯
-            const content = JSON.stringify(vals);
+            // 🧪 語意邏輯：非線性的變異反應
             
-            if (content.includes("火") || content.includes("太陽") || content.includes("熱")) {
-                hue = 15; // 暖色調
-                saturation = "80%";
-            } else if (content.includes("森") || content.includes("草") || content.includes("花")) {
-                hue = 140; // 綠色
-            } else if (content.includes("電") || content.includes("機器") || content.includes("太空")) {
-                hue = 280; // 紫/科技色
+            // 1. 形狀變異 (Morphing)
+            if(str.includes("水") || str.includes("海") || str.includes("跳")) {
+                root.style.setProperty('--morph', "40% 60% 70% 30% / 50% 40% 60% 50%");
+                root.style.setProperty('--blur', "15px");
+            } else if(str.includes("冰") || str.includes("山") || str.includes("坐")) {
+                root.style.setProperty('--morph', "5% 95% 5% 95% / 95% 5% 95% 5%");
+                root.style.setProperty('--blur', "2px");
+            } else {
+                root.style.setProperty('--morph', "50% 50% 50% 50% / 50% 50% 50% 50%");
+                root.style.setProperty('--blur', "10px");
             }
 
-            if (content.includes("快") || content.includes("跑") || content.includes("跳")) {
-                speed = "2s";
-                glow = "60px";
-            } else if (content.includes("靜") || content.includes("睡") || content.includes("慢")) {
-                speed = "20s";
-                glow = "5px";
-            }
+            // 2. 顏色與維度 (Color & Rotation)
+            let hue = 0;
+            if(str.includes("晚") || str.includes("夜")) hue = 240;
+            else if(str.includes("午") || str.includes("日")) hue = 40;
+            else if(str.includes("森") || str.includes("草")) hue = 100;
+            else hue = Math.random() * 360;
 
-            // 3. 更新環境變量 (CSS Variables)
-            document.documentElement.style.setProperty('--hue', hue);
-            document.documentElement.style.setProperty('--saturation', saturation);
-            document.documentElement.style.setProperty('--glow', glow);
-            document.documentElement.style.setProperty('--speed', speed);
+            root.style.setProperty('--rotation', `${hue}deg`);
+            root.style.setProperty('--primary', `hsl(${hue}, 100%, 70%)`);
+            root.style.setProperty('--accent', `hsl(${hue}, 100%, 50%)`);
 
-            // 4. AI 共同創作的敘事輸出
-            // 這裡模擬 AI 根據你的詞彙生成的「場景擴寫」
-            const expansions = [
-                `這是一個充滿奇幻色彩的瞬間。在${vals.t}，${vals.p}${vals.l}正在${vals.e}。這讓周圍的能量變得非常${hue > 100 ? '平靜' : '熱烈'}。`,
-                `觀察記錄：${vals.p}選擇在${vals.t}的時候，特地跑到了${vals.l}。看起來${vals.e}對這個世界的生態平衡至關重要。`,
-                `新的語意生命誕生了！我們看到${vals.l}因為${vals.p}的${vals.e}，散發出了前所未有的${hue > 180 ? '神祕感' : '生命力'}。`
-            ];
-            
-            box.style.opacity = 0;
-            setTimeout(() => {
-                box.innerText = expansions[Math.floor(Math.random() * expansions.length)];
-                box.style.opacity = 1;
-            }, 300);
+            // 3. AI 語意反饋
+            document.getElementById('narrative').innerText = `【物態分析】：偵測到來自「${vals[2]}」的能量。${vals[1]}正在改變這裡的重力...`;
         }
     </script>
 </body>
