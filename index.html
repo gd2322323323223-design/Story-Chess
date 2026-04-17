@@ -2,129 +2,146 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <title>AI 語意奇點：宇宙重構實驗</title>
+    <title>AI 語意生態缸：全感官控制台</title>
     <style>
-        :root { --hue: 200; --energy: 0; --gravity: 1; --glitch: 0; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; color: white; font-family: 'PingFang HK', sans-serif; }
+        :root { --h: 200; --s: 50%; --l: 50%; --energy-val: 0; --stability-val: 100; --vib: 0px; }
+        body, html { margin: 0; padding: 0; height: 100vh; background: #050508; color: #00f2fe; font-family: 'Orbitron', sans-serif; overflow: hidden; display: flex; flex-direction: column; }
 
-        /* 全場景背景：由語意決定的環境氛圍 */
-        #world {
-            position: fixed; width: 100vw; height: 100vh;
-            background: radial-gradient(circle at center, 
-                hsl(var(--hue), 50%, 10%) 0%, 
-                #000 100%);
-            transition: background 2s ease;
-            z-index: 1;
-        }
+        /* 背景微弱掃描線 */
+        body::before { content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03)); background-size: 100% 3px, 3px 100%; pointer-events: none; z-index: 100; }
 
-        /* 強烈視覺：動態掃描線與故障感 */
-        .overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
-                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            background-size: 100% 2px, 3px 100%; pointer-events: none; z-index: 10;
-        }
+        /* 主配置佈局 */
+        .main-layout { flex: 1; display: flex; padding: 20px; gap: 20px; align-items: center; justify-content: space-around; }
 
-        /* 核心奇點：震撼的液態金屬變形 */
-        #singularity-container {
-            position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
-            filter: url('#goo'); z-index: 5;
+        /* 左側：視覺區（生態球） */
+        .visual-sector { flex: 2; display: flex; justify-content: center; align-items: center; position: relative; }
+        #sphere-container { 
+            width: 400px; height: 400px; border-radius: 50%; border: 2px solid rgba(0, 242, 254, 0.3);
+            position: relative; box-shadow: inset 0 0 50px rgba(0, 242, 254, 0.2), 0 0 30px rgba(0, 242, 254, 0.1);
+            filter: url('#goo'); transition: all 0.8s ease;
         }
-        .blob {
-            width: 200px; height: 200px; background: hsl(var(--hue), 100%, 60%);
-            border-radius: 50%; position: absolute;
-            box-shadow: 0 0 calc(var(--energy) * 1px) hsl(var(--hue), 100%, 50%);
-            transition: all 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        .core-blob { 
+            width: 200px; height: 200px; background: hsl(var(--h), var(--s), var(--l)); 
+            border-radius: 50%; position: absolute; left: 100px; top: 100px;
+            box-shadow: 0 0 calc(var(--energy-val) * 0.5px) hsl(var(--h), 100%, 50%);
+            animation: breathe 4s infinite ease-in-out;
         }
 
-        /* 控制面板：沉浸式設計 */
-        .ui {
-            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            display: grid; grid-template-columns: repeat(2, 200px); gap: 15px;
-            background: rgba(0, 0, 0, 0.8); padding: 25px; border-radius: 20px;
-            border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); z-index: 20;
-        }
-        input { background: #111; border: 1px solid #333; padding: 12px; color: #fff; border-radius: 5px; outline: none; }
-        input:focus { border-color: hsl(var(--hue), 100%, 50%); }
-        button { 
-            grid-column: span 2; padding: 15px; background: #fff; color: #000; font-weight: bold; 
-            border-radius: 5px; cursor: pointer; border: none; transition: 0.3s;
-        }
-        button:hover { background: hsl(var(--hue), 100%, 60%); transform: scale(1.02); }
+        /* 右側：感官指標（動態曲線） */
+        .indicator-sector { flex: 1; display: flex; flex-direction: column; gap: 30px; background: rgba(0,0,0,0.4); padding: 30px; border-radius: 20px; border: 1px solid rgba(0, 242, 254, 0.1); }
+        .indicator { position: relative; }
+        .label { font-size: 12px; margin-bottom: 10px; letter-spacing: 2px; color: #aaa; }
+        .bar-bg { width: 100%; height: 6px; background: #111; border-radius: 3px; overflow: hidden; }
+        .bar-fill { height: 100%; width: 0%; transition: width 1s cubic-bezier(0.175, 0.885, 0.32, 1.275); background: #00f2fe; box-shadow: 0 0 10px #00f2fe; }
 
-        #log { position: absolute; top: 50px; width: 100%; text-align: center; font-size: 1.5rem; letter-spacing: 2px; z-index: 20; }
+        /* 底部：能量發光槽 */
+        .power-slots { height: 150px; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; gap: 15px; border-top: 1px solid rgba(0, 242, 254, 0.2); }
+        .slot { display: flex; flex-direction: column; }
+        input { 
+            background: #000; border: 1px solid #00f2fe; padding: 12px; color: #00f2fe; 
+            border-radius: 5px; width: 150px; text-align: center; font-size: 16px;
+            box-shadow: 0 0 5px rgba(0, 242, 254, 0.2); transition: 0.3s;
+        }
+        input:focus { box-shadow: 0 0 20px #00f2fe; outline: none; }
+        .inject-btn { 
+            padding: 15px 40px; background: #00f2fe; color: #000; font-weight: bold; 
+            border: none; border-radius: 5px; cursor: pointer; font-size: 18px; transition: 0.3s;
+        }
+        .inject-btn:hover { transform: scale(1.05); box-shadow: 0 0 30px #00f2fe; }
+
+        @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+        @keyframes shake { 0% { transform: translate(0); } 25% { transform: translate(var(--vib), var(--vib)); } 75% { transform: translate(calc(var(--vib) * -1), var(--vib)); } }
+
+        #narrative { position: absolute; top: 40px; width: 100%; text-align: center; font-size: 1.2rem; text-shadow: 0 0 10px #00f2fe; }
     </style>
 </head>
-<body>
+<body id="main-body">
 
-    <div id="world"></div>
-    <div class="overlay"></div>
-    <div id="log">等待語意注入...</div>
+    <div id="narrative">SYSTEM READY: 等待語意注入</div>
 
-    <div id="singularity-container">
-        <div class="blob" id="main-blob"></div>
-        <div class="blob" style="transform: translate(30px, 30px) scale(0.8); opacity: 0.5;"></div>
+    <div class="main-layout">
+        <div class="visual-sector">
+            <div id="sphere-container">
+                <div class="core-blob" id="blob-main"></div>
+            </div>
+        </div>
+
+        <div class="indicator-sector">
+            <div class="indicator">
+                <div class="label">能量值 ENERGY (動詞強度)</div>
+                <div class="bar-bg"><div id="bar-energy" class="bar-fill"></div></div>
+            </div>
+            <div class="indicator">
+                <div class="label">穩定度 STABILITY (結構完整)</div>
+                <div class="bar-bg"><div id="bar-stability" class="bar-fill" style="background: #ff4757; box-shadow: 0 0 10px #ff4757;"></div></div>
+            </div>
+            <div class="indicator">
+                <div class="label">氛圍色譜 MOOD (形容詞情緒)</div>
+                <div class="bar-bg"><div id="bar-mood" class="bar-fill" style="background: linear-gradient(90deg, #ff00cc, #3333ff);"></div></div>
+            </div>
+        </div>
     </div>
 
-    <svg xmlns="http://www.w3.org/2000/svg" version="1.1" style="display:none;">
-      <defs>
-        <filter id="goo">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="15" result="blur" />
-          <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 30 -10" result="goo" />
-          <feBlend in="SourceGraphic" in2="goo" />
-        </filter>
-      </defs>
-    </svg>
-
-    <div class="ui">
-        <input type="text" id="t" placeholder="時間 (如：三萬年後)">
-        <input type="text" id="p" placeholder="人物 (如：火龍)">
-        <input type="text" id="l" placeholder="地點 (如：在太陽裡)">
-        <input type="text" id="e" placeholder="事件 (如：跳舞)">
-        <button onclick="reconstruct()">🌀 啟動語意重構</button>
+    <div class="power-slots">
+        <div class="slot"><input type="text" id="t" placeholder="什麼時間？"></div>
+        <div class="slot"><input type="text" id="p" placeholder="誰？"></div>
+        <div class="slot"><input type="text" id="l" placeholder="在哪裡？"></div>
+        <div class="slot"><input type="text" id="e" placeholder="做什麼？"></div>
+        <button class="inject-btn" onclick="inject()">⚡ 注入語意</button>
     </div>
+
+    <svg style="display:none;"><defs><filter id="goo"><feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" /><feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 18 -7" /></filter></defs></svg>
 
     <script>
-        function reconstruct() {
-            const vals = {
-                t: document.getElementById('t').value,
-                p: document.getElementById('p').value,
-                l: document.getElementById('l').value,
-                e: document.getElementById('e').value
-            };
-
-            if(Object.values(vals).some(v => !v)) return;
-
+        function inject() {
+            const v = { t: document.getElementById('t').value, p: document.getElementById('p').value, l: document.getElementById('l').value, e: document.getElementById('e').value };
             const root = document.documentElement;
-            const log = document.getElementById('log');
-            const mainBlob = document.getElementById('main-blob');
+            const log = document.getElementById('narrative');
 
-            // --- 核心邏輯：全句語意聯動矩陣 ---
-            let h = 200, en = 50, gr = 1;
+            // 1. 穩定度計算 (結構連繫)
+            let stability = 0;
+            if (v.t && v.p && v.l && v.e) stability = 100;
+            document.getElementById('bar-stability').style.width = stability + '%';
 
-            // 1. 聯繫：地點與時間決定色相
-            if(vals.l.includes("太陽") || vals.t.includes("中午")) h = 20;
-            else if(vals.l.includes("海") || vals.t.includes("深夜")) h = 230;
-            else if(vals.l.includes("森")) h = 120;
-            else h = Math.random() * 360;
+            // 2. 能量值分析 (事件與人物連動)
+            let energy = 30;
+            if (v.e.includes("大叫") || v.e.includes("爆炸") || v.e.includes("跑")) energy = 95;
+            else if (v.e.includes("睡") || v.e.includes("靜")) energy = 10;
+            document.getElementById('bar-energy').style.width = energy + '%';
 
-            // 2. 聯繫：事件與人物決定能量 (Energy)
-            if(vals.e.includes("爆炸") || vals.e.includes("跑")) en = 300;
-            else if(vals.e.includes("睡") || vals.e.includes("靜")) en = 10;
+            // 3. 氛圍色譜 (時間與地點連動)
+            let hue = 200;
+            if (v.l.includes("太陽") || v.l.includes("火")) hue = 15;
+            else if (v.l.includes("深海") || v.t.includes("深夜")) hue = 240;
+            document.getElementById('bar-mood').style.width = (hue / 3.6) + '%';
 
-            // 3. 視覺震撼：根據能量改變形狀與縮放
-            mainBlob.style.transform = `scale(${en / 100 + 0.5})`;
-            root.style.setProperty('--hue', h);
-            root.style.setProperty('--energy', en);
+            // 4. 震撼視覺反饋
+            root.style.setProperty('--h', hue);
+            root.style.setProperty('--energy-val', energy * 5);
+            
+            const blob = document.getElementById('blob-main');
+            if (energy > 80) {
+                blob.style.transition = "0.1s";
+                blob.style.transform = "scale(1.8)";
+                root.style.setProperty('--vib', "5px");
+                document.getElementById('main-body').style.animation = "shake 0.1s infinite";
+                log.innerText = `[⚠️ 能量爆載] ${v.p} 在 ${v.l} 引發強烈震盪！`;
+            } else {
+                blob.style.transition = "1s";
+                blob.style.transform = "scale(1)";
+                root.style.setProperty('--vib', "0px");
+                document.getElementById('main-body').style.animation = "none";
+                log.innerText = `[OK] 語意合成成功：${v.p} 的行為模式已同步。`;
+            }
 
-            // 4. AI 敘事：模擬整句邏輯理解
-            log.innerText = `【奇點報告】：${vals.t}，${vals.p}在${vals.l}${vals.e}，引發了語意塌縮！`;
-            log.style.color = `hsl(${h}, 100%, 70%)`;
-
-            // 5. 增加不穩定感
-            if(en > 150) {
-                document.body.style.animation = "shake 0.1s infinite";
-                setTimeout(() => document.body.style.animation = "", 500);
+            // 5. 語意衝突檢查 (連繫測試：雪人+沙漠)
+            if (v.p.includes("雪人") && v.l.includes("沙漠")) {
+                log.innerText = "🚨 偵測到邏輯崩潰：雪人在沙漠中正在融化！系統重載！";
+                blob.style.background = "white";
+                blob.style.filter = "blur(30px)";
+                document.getElementById('bar-stability').style.width = '20%';
+            } else {
+                blob.style.filter = "none";
             }
         }
     </script>
