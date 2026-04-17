@@ -18,9 +18,10 @@ let turn = 0;
 let timerInterval;
 const bgMusic = document.getElementById('bgMusic');
 
-// 初始化棋盤
+// --- 初始化棋盤 ---
 const board = document.getElementById('board');
 if (board) {
+    board.innerHTML = ''; // 清空
     for (let i = 0; i < 24; i++) {
         const cell = document.createElement('div');
         cell.className = 'cell';
@@ -60,26 +61,34 @@ function rollDice() {
     setTimeout(() => showModal(words[players[turn].pos]), 600);
 }
 
+// --- 彈窗功能 ---
 function showModal(word) {
     const modal = document.getElementById('modal');
     document.getElementById('modal-text').innerText = word;
     
     const starter = storyStarters[word] || `關於「${word}」，我聽過一個很神祕的故事...`;
+    
+    // ✅ 重要：使用 id="current-starter" 方便稍後抓取文字
     document.getElementById('ai-sentence-text').innerHTML = 
         `<span style="color: #718096;">故事開始：</span><br><span id="current-starter">${starter}</span>`; 
     
-    // 重置按鈕狀態
+    // 重置按鈕
     const aiBtn = document.getElementById('ai-btn');
     const doneBtn = document.getElementById('done-btn');
-    aiBtn.innerText = "🎤 AI 老師聽接龍創作";
-    aiBtn.style.background = "#5d4037";
-    doneBtn.innerText = "✅ 完成/跳過";
-    doneBtn.style.background = "#48bb78";
+    if (aiBtn) {
+        aiBtn.innerText = "🎤 AI 老師聽接龍創作";
+        aiBtn.style.background = "#5d4037";
+    }
+    if (doneBtn) {
+        doneBtn.innerText = "✅ 完成/跳過";
+        doneBtn.style.background = "#48bb78";
+    }
 
     modal.style.display = 'block';
     startTimer();
 }
 
+// --- 語音功能 ---
 function startRecognition() {
     if (bgMusic) bgMusic.pause();
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -105,7 +114,7 @@ function startRecognition() {
 
             const starterText = document.getElementById('current-starter').innerText;
             
-            // ✅ 更新介面：合併文字，不關閉視窗
+            // ✅ 合併文字：不關閉彈窗
             document.getElementById('ai-sentence-text').innerHTML = 
                 `<span style="color: #718096;">${starterText}</span><br>` +
                 `<span style="color: #2b6cb0; font-weight: bold; font-size: 1.1em;">你的接龍：${studentSpeech}</span>`;
@@ -114,8 +123,10 @@ function startRecognition() {
             aiBtn.style.background = "#48bb78";
             
             const doneBtn = document.getElementById('done-btn');
-            doneBtn.innerText = "🚀 點我完成創作";
-            doneBtn.style.background = "#3182ce";
+            if (doneBtn) {
+                doneBtn.innerText = "🚀 成功了！點我下一步";
+                doneBtn.style.background = "#3182ce";
+            }
         } else {
             alert(`句子裡要包含「${originalWord}」喔！你說的是：「${studentSpeech}」`);
             aiBtn.innerText = "🎤 再試一次";
@@ -124,13 +135,12 @@ function startRecognition() {
     };
 
     recognition.onerror = () => {
-        aiBtn.innerText = "🎤 點擊重試";
+        aiBtn.innerText = "🎤 錄音失敗";
         aiBtn.style.background = "#5d4037";
     };
 }
 
 function speakWord() {
-    if (bgMusic) bgMusic.pause();
     window.speechSynthesis.cancel();
     const text = document.getElementById('modal-text').innerText;
     const msg = new SpeechSynthesisUtterance(text);
@@ -139,7 +149,6 @@ function speakWord() {
 }
 
 function speakSentence() {
-    if (bgMusic) bgMusic.pause();
     window.speechSynthesis.cancel();
     const text = document.getElementById('ai-sentence-text').innerText;
     const msg = new SpeechSynthesisUtterance(text);
@@ -147,20 +156,26 @@ function speakSentence() {
     window.speechSynthesis.speak(msg);
 }
 
+// --- 輔助功能 ---
 function startTimer() {
     let timeLeft = 120;
     clearInterval(timerInterval);
     timerInterval = setInterval(() => {
         timeLeft--;
         const timerEl = document.getElementById('timer');
-        if (timerEl) timerEl.innerText = `⏳ 剩餘時間: ${timeLeft}s`;
-        if (timeLeft <= 0) closeModal(false);
+        if (timerEl) {
+            timerEl.innerText = `⏳ 剩餘時間: ${timeLeft}s`;
+        }
+        if (timeLeft <= 0) {
+            closeModal(false);
+        }
     }, 1000);
 }
 
 function closeModal(isCompleted) {
     clearInterval(timerInterval);
-    document.getElementById('modal').style.display = 'none';
+    const modal = document.getElementById('modal');
+    if (modal) modal.style.display = 'none';
     if (bgMusic) bgMusic.play();
     turn = (turn + 1) % players.length;
 }
