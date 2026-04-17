@@ -1,1 +1,29 @@
 
+/* 基礎呼吸動畫 */
+@keyframes breathing {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); }
+    50% { transform: translate(-50%, -50%) scale(1.1); }
+}
+
+/* 劇烈大叫/爆炸的動畫 */
+@keyframes violent-shout {
+    0% { transform: translate(-50%, -50%) scale(1); filter: brightness(1); }
+    20% { transform: translate(-52%, -48%) scale(1.8); filter: brightness(2); }
+    40% { transform: translate(-48%, -52%) scale(1.5); }
+    60% { transform: translate(-51%, -49%) scale(1.9); }
+    100% { transform: translate(-50%, -50%) scale(1.6); }
+}
+
+#singularity-container {
+    position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
+    filter: url('#goo'); z-index: 5;
+    transition: all 0.5s ease; /* 讓縮放過程有平滑感 */
+}
+
+.blob {
+    width: 200px; height: 200px; background: hsl(var(--hue), 100%, 60%);
+    border-radius: 50%; position: absolute;
+    box-shadow: 0 0 calc(var(--energy) * 1px) hsl(var(--hue), 100%, 50%);
+    /* 預設呼吸 */
+    animation: breathing 4s infinite ease-in-out;
+}
