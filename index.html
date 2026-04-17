@@ -1,50 +1,131 @@
-
 <!DOCTYPE html>
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>詞語大作戰</title>
-    <link rel="stylesheet" href="style.css">
+    <title>AI 語意生態缸 Experiment</title>
+    <style>
+        :root { --sphere-color: #00f2fe; --bg-speed: 10s; }
+        body { margin: 0; background: #0a0a1a; color: white; font-family: "PingFang HK", "Microsoft JhengHei", sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
+        
+        /* 生態缸本體 */
+        #eco-sphere {
+            width: 350px; height: 350px; border-radius: 50%; border: 4px solid var(--sphere-color);
+            position: relative; box-shadow: 0 0 50px var(--sphere-color);
+            transition: all 1.5s ease; background: radial-gradient(circle at center, #1a1a3a 0%, #050510 100%);
+            display: flex; align-items: center; justify-content: center; overflow: hidden;
+        }
+
+        /* 語意粒子 */
+        .particle { position: absolute; background: white; border-radius: 50%; opacity: 0.5; animation: float var(--bg-speed) infinite ease-in-out; }
+        @keyframes float { 0%, 100% { transform: translateY(0) translateX(0); } 50% { transform: translateY(-100px) translateX(20px); } }
+
+        /* AI 敘事文字 */
+        #ai-narrative { position: absolute; bottom: 40px; width: 80%; text-align: center; font-size: 1.1em; line-height: 1.5; text-shadow: 0 2px 10px black; pointer-events: none; z-index: 10; color: #fff; }
+
+        /* 控制面板 */
+        .control-panel { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 20px; backdrop-filter: blur(10px); width: 400px; }
+        input { background: rgba(0,0,0,0.5); border: 1px solid #444; padding: 10px; color: white; border-radius: 8px; font-size: 16px; }
+        button { grid-column: span 2; padding: 12px; background: linear-gradient(45deg, #00f2fe, #4facfe); border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; font-size: 18px; transition: 0.3s; }
+        button:hover { transform: scale(1.05); filter: brightness(1.2); }
+
+        .status-msg { margin-top: 10px; font-size: 0.9em; color: #888; }
+    </style>
 </head>
 <body>
-    <div id="game-container">
-        <div id="board"></div>
-        <div id="players-info">
-            <div class="player-card p1">Player 1: <span id="s1">0</span></div>
-            <div class="player-card p2">Player 2: <span id="s2">0</span></div>
-            <div class="player-card p3">Player 3: <span id="s3">0</span></div>
-            <div class="player-card p4">Player 4: <span id="s4">0</span></div>
+
+    <h2 style="margin-bottom: 20px; letter-spacing: 2px;">語意生態缸 v1.0</h2>
+
+    <div id="eco-sphere">
+        <div id="ai-narrative">請在下方注入語意能量...</div>
         </div>
-        <button id="dice-btn" onclick="rollDice()">🎲 擲骰子</button>
-        <div id="dice-result"></div>
+
+    <div class="control-panel">
+        <input type="text" id="time" placeholder="時間（如：深夜）">
+        <input type="text" id="person" placeholder="人物（如：小精靈）">
+        <input type="text" id="place" placeholder="地點（如：森林裡）">
+        <input type="text" id="event" placeholder="事件（如：發光）">
+        <button onclick="injectSemantic()">✨ 注入語意能量</button>
     </div>
 
-    <div id="modal-overlay"></div>
-    <div id="modal">
-        <div id="timer">⏳ 剩餘時間: 120s</div>
-        <div id="modal-text" onclick="speakWord()" style="cursor:pointer;">詞語</div>
-        
-        <div id="ai-sentence-box">
-            <div id="ai-sentence-text">這是一個例句。</div>
-        </div>
+    <div class="status-msg" id="status">等待四素句配方...</div>
 
-        <div class="btn-group">
-            <button onclick="speakWord()" class="blue-btn">讀出詞語 🔊</button>
-            <button onclick="speakSentence()" class="blue-btn">讀出句子 🔊</button>
-        </div>
+    <script>
+        // 模擬 AI 的語義理解映射
+        const semanticMap = {
+            "深夜": { color: "#4834d4", speed: "15s" },
+            "中午": { color: "#f9ca24", speed: "5s" },
+            "早上": { color: "#ffbe76", speed: "8s" },
+            "森林": { color: "#6ab04c", speed: "10s" },
+            "太空": { color: "#130f40", speed: "20s" },
+            "火龍": { color: "#eb4d4b", speed: "4s" },
+            "發光": { color: "#ffffff", speed: "3s", glow: true }
+        };
 
-       <div style="display: flex; gap: 10px; flex-direction: column;">
-    <button onclick="startRecognition()" id="ai-btn">🎤 AI 老師聽接龍創作</button>
-    
-    <button onclick="closeModal(true)" id="done-btn">✅ 完成/跳過</button>
-</div>
-    </div>
+        function injectSemantic() {
+            const t = document.getElementById('time').value;
+            const p = document.getElementById('person').value;
+            const l = document.getElementById('place').value;
+            const e = document.getElementById('event').value;
 
-    <audio id="bgMusic" loop>
-        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
-    </audio>
+            if (!t || !p || !l || !e) {
+                document.getElementById('status').innerText = "❌ 能量不足：四素句不完整，生態缸無法穩定。";
+                document.getElementById('eco-sphere').style.borderColor = "#ff4757";
+                return;
+            }
 
-    <script src="script.js"></script>
+            // 1. 模擬 AI 情感分析與顏色轉譯
+            let themeColor = "#00f2fe";
+            let animSpeed = "10s";
+            
+            // 簡單邏輯：只要輸入包含關鍵字，就改變生態缸物理屬性
+            Object.keys(semanticMap).forEach(key => {
+                if(`${t}${p}${l}${e}`.includes(key)) {
+                    themeColor = semanticMap[key].color;
+                    animSpeed = semanticMap[key].speed;
+                }
+            });
+
+            // 2. 應用物理變化 (非 AI 不可的「環境實驗」)
+            const sphere = document.getElementById('eco-sphere');
+            sphere.style.setProperty('--sphere-color', themeColor);
+            sphere.style.setProperty('--bg-speed', animSpeed);
+            
+            // 3. 模擬 AI 共同創作 (擴寫句子)
+            // 實際應用中此處會發送 API 到 OpenAI 等模型
+            const aiWords = [
+                `在那個${t}，${p}正靜靜地待在${l}，${e}的瞬間讓整個世界都亮了。`,
+                `看啊！當${t}降臨，${p}竟然在${l}${e}，這真是一場奇妙的實驗！`,
+                `這是一個關於${p}的故事：在${t}的${l}，一切都因為${e}而改變了。`
+            ];
+            const randomStory = aiWords[Math.floor(Math.random() * aiWords.length)];
+            
+            document.getElementById('ai-narrative').innerText = randomStory;
+            document.getElementById('status').innerText = "✅ 語意注入成功！環境已重構。";
+
+            // 生成隨機粒子
+            createParticles(themeColor);
+        }
+
+        function createParticles(color) {
+            const sphere = document.getElementById('eco-sphere');
+            // 清除舊粒子
+            const old = sphere.querySelectorAll('.particle');
+            old.forEach(n => n.remove());
+
+            for(let i=0; i<15; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                const size = Math.random() * 10 + 5 + 'px';
+                p.style.width = size;
+                p.style.height = size;
+                p.style.left = Math.random() * 100 + '%';
+                p.style.top = Math.random() * 100 + '%';
+                p.style.background = color;
+                p.style.animationDelay = Math.random() * 5 + 's';
+                sphere.appendChild(p);
+            }
+        }
+    </script>
 </body>
 </html>
