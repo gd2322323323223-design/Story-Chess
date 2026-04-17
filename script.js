@@ -97,49 +97,60 @@ function speakSentence() {
 
 function startRecognition() {
     if (bgMusic) bgMusic.pause();
+    
+    // 檢查瀏覽器是否支援
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return alert("瀏覽器不支援語音識別");
+    if (!SpeechRecognition) {
+        alert("你的瀏覽器不支援語音功能，請使用 Chrome 瀏覽器。");
+        return;
+    }
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'zh-HK';
     const originalWord = document.getElementById('modal-text').innerText;
+    const aiBtn = document.getElementById('ai-btn');
 
-    // 獲取 AI 的故事開頭
-    const starterText = document.getElementById('ai-sentence-text').innerText.replace("故事開始：", "");
+    // 🚩 視覺回饋：按下去立刻變色
+    aiBtn.innerText = "🎤 正在聽...請說話";
+    aiBtn.style.background = "#e53e3e"; // 變成紅色代表正在錄音
 
     recognition.start();
 
-    // 顯示正在聆聽的視覺回饋
-    document.getElementById('ai-btn').innerText = "🎤 正在聽你接龍...";
-
     recognition.onresult = (event) => {
         const studentSpeech = event.results[0][0].transcript;
-        
-        // 檢查是否包含關鍵詞
+        console.log("識別結果:", studentSpeech); // 你可以在瀏覽器 F12 看到這行
+
         if (studentSpeech.includes(originalWord)) {
-            players[turn].score += 10; // 接龍成功給 10 分！
+            players[turn].score += 10;
             document.getElementById('s' + (turn + 1)).innerText = players[turn].score;
 
-            // --- 共同創作展示 ---
+            // 更新故事內容
+            const starterText = document.getElementById('ai-sentence-text').innerText.replace("故事開始：", "");
             document.getElementById('ai-sentence-text').innerHTML = 
                 `<span style="color: #718096;">${starterText}</span><br>` +
                 `<span style="color: #2b6cb0; font-weight: bold;">你的接龍：${studentSpeech}</span>`;
             
-            document.getElementById('ai-btn').innerText = "✅ 接龍成功！";
+            aiBtn.innerText = "✅ 成功！";
+            aiBtn.style.background = "#48bb78"; // 成功變綠色
             
-            // 讓學生看 3 秒自己的創作成果再關閉
             setTimeout(() => {
-                document.getElementById('ai-btn').innerText = "🎤 AI老師聽讀音";
+                aiBtn.style.background = "#5d4037"; // 恢復原色
+                aiBtn.innerText = "🎤 AI老師聽讀音";
                 closeModal(true);
             }, 3000);
         } else {
-            alert(`哎呀！接龍句子裡要包含「${originalWord}」這個詞喔，請再試一次！`);
-            document.getElementById('ai-btn').innerText = "🎤 AI老師聽讀音";
+            alert(`識別到：「${studentSpeech}」\n請確保句子包含「${originalWord}」`);
+            aiBtn.innerText = "🎤 再試一次";
+            aiBtn.style.background = "#5d4037";
         }
     };
 
-    recognition.onerror = () => {
-        document.getElementById('ai-btn').innerText = "🎤 AI老師聽讀音";
+    // 處理錯誤
+    recognition.onerror = (event) => {
+        console.error("語音錯誤:", event.error);
+        aiBtn.innerText = "🎤 錄音失敗，請再點一次";
+        aiBtn.style.background = "#5d4037";
+        if(event.error === 'not-allowed') alert("請開啟麥克風權限！");
     };
 }
 
