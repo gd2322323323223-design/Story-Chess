@@ -2,151 +2,94 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <title>AI 語意奇點：現實崩解控制台</title>
+    <title>我的生活拍立得</title>
     <style>
-        :root { --h: 190; --energy: 0; --stability: 100; --glitch-op: 0; }
+        body { margin: 0; background: #f0f0f0; font-family: "MSung", "微軟正黑體", sans-serif; display: flex; flex-direction: column; align-items: center; }
         
-        /* 全域基礎樣式 */
-        body, html { 
-            margin: 0; padding: 0; height: 100vh; background: #000; 
-            color: #00f2fe; font-family: 'Courier New', Courier, monospace; 
-            overflow: hidden; transition: filter 0.5s ease;
+        /* 拍立得相框 */
+        #photo-frame {
+            width: 400px; height: 500px; background: white; margin-top: 50px;
+            padding: 15px 15px 60px 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            position: relative; overflow: hidden; transform: rotate(-2deg);
+            transition: all 0.5s ease;
         }
 
-        /* 當能量過載時，全網頁反轉 (強烈視覺刺激) */
-        .overload { filter: invert(1) hue-rotate(180deg) contrast(1.5); }
+        /* 內容層疊 */
+        #bg-layer { position: absolute; top: 15px; left: 15px; right: 15px; height: 380px; background: #e0e0e0; transition: 0.5s; background-size: cover; }
+        #sprite-layer { position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); font-size: 100px; transition: 0.5s; }
+        #effect-layer { position: absolute; inset: 15px; pointer-events: none; display: flex; justify-content: center; align-items: center; font-size: 40px; }
 
-        /* 背景：動態雜訊層 */
-        #noise-bg {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: url('https://media.giphy.com/media/oEI9uWUicS3Ze/giphy.gif');
-            opacity: 0.03; pointer-events: none; z-index: 1;
-        }
-
-        /* 主配置佈局 */
-        .dashboard { 
-            display: grid; grid-template-columns: 1fr 300px; height: 80vh; 
-            padding: 20px; gap: 20px; z-index: 10; position: relative;
-        }
-
-        /* 左側：核心觀察區 */
-        .viewport { 
-            display: flex; justify-content: center; align-items: center; 
-            border: 1px solid rgba(0, 242, 254, 0.2); background: rgba(0,0,0,0.5);
-            position: relative; overflow: hidden;
-        }
-        #core {
-            width: 250px; height: 250px; background: hsl(var(--h), 100%, 50%);
-            border-radius: 50%; filter: blur(15px) contrast(30);
-            box-shadow: 0 0 100px hsl(var(--h), 100%, 50%);
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-
-        /* 右側：指標讀數 */
-        .stats { background: rgba(10,10,20,0.8); border: 1px solid #00f2fe; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
-        .stat-bar { height: 10px; background: #111; border-radius: 5px; position: relative; overflow: hidden; }
-        .fill { height: 100%; width: 0%; transition: width 0.5s; background: #00f2fe; box-shadow: 0 0 10px #00f2fe; }
-
-        /* 底部：控制輸入 */
-        .controls { 
-            height: 20vh; background: #000; border-top: 2px solid #00f2fe;
-            display: flex; justify-content: center; align-items: center; gap: 15px; padding: 0 20px;
-        }
-        input { 
-            background: #000; border: 1px solid #00f2fe; padding: 15px; color: #fff; 
-            width: 180px; font-size: 1.1rem; border-radius: 4px;
-        }
-        button { 
-            padding: 15px 30px; background: #00f2fe; color: #000; border: none; 
-            font-weight: bold; cursor: pointer; font-size: 1.1rem;
-        }
-        button:hover { filter: brightness(1.2); }
-
-        /* 全螢幕故障遮罩 */
-        #glitch-mask {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255, 255, 255, 0.1); opacity: var(--glitch-op);
-            pointer-events: none; z-index: 100; mix-blend-mode: difference;
-        }
-
-        @keyframes shake { 0% { transform: translate(0,0); } 20% { transform: translate(-10px, 5px); } 40% { transform: translate(10px, -5px); } 60% { transform: translate(-10px, -5px); } 80% { transform: translate(10px, 5px); } }
+        /* 輸入區 */
+        .controls { margin-top: 40px; background: white; padding: 20px; border-radius: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .input-box { display: flex; flex-direction: column; }
+        label { font-size: 12px; color: #888; margin-bottom: 5px; }
+        input { border: 1px solid #ddd; padding: 10px; border-radius: 5px; font-size: 16px; }
+        button { grid-column: span 2; padding: 15px; background: #ffcc00; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 18px; }
+        
+        #caption { position: absolute; bottom: 20px; width: 100%; text-align: center; font-size: 18px; color: #444; font-weight: bold; }
     </style>
 </head>
-<body id="body-view">
+<body>
 
-    <div id="noise-bg"></div>
-    <div id="glitch-mask"></div>
-
-    <div class="dashboard">
-        <div class="viewport">
-            <div id="core"></div>
-            <div id="status-text" style="position: absolute; top: 20px; left: 20px; font-size: 0.8rem;">CORE_STATUS: STABLE</div>
-        </div>
-
-        <div class="stats">
-            <div>ENERGY OUTPUT<div class="stat-bar"><div id="bar-e" class="fill"></div></div></div>
-            <div>STABILITY INDEX<div class="stat-bar"><div id="bar-s" class="fill" style="background:#ff4757;"></div></div></div>
-            <div>DIMENSIONAL SHIFT<div class="stat-bar"><div id="bar-d" class="fill" style="background:#70a1ff;"></div></div></div>
-        </div>
+    <div id="photo-frame">
+        <div id="bg-layer"></div>
+        <div id="sprite-layer">❓</div>
+        <div id="effect-layer"></div>
+        <div id="caption">點擊下方按鈕拍照</div>
     </div>
 
     <div class="controls">
-        <input type="text" id="t" placeholder="WHEN">
-        <input type="text" id="p" placeholder="WHO">
-        <input type="text" id="l" placeholder="WHERE">
-        <input type="text" id="e" placeholder="ACTION">
-        <button onclick="executeRealityShift()">RUN_PROGRAM</button>
+        <div class="input-box"><label>1. 什麼時候</label><input type="text" id="t" placeholder="例如：早上"></div>
+        <div class="input-box"><label>2. 誰</label><input type="text" id="p" placeholder="例如：小貓"></div>
+        <div class="input-box"><label>3. 在哪裡</label><input type="text" id="l" placeholder="例如：在公園"></div>
+        <div class="input-box"><label>4. 做什麼</label><input type="text" id="e" placeholder="例如：跑跳"></div>
+        <button onclick="takePhoto()">📸 拍下一張生活照</button>
     </div>
 
     <script>
-        function executeRealityShift() {
-            const v = { t: document.getElementById('t').value, p: document.getElementById('p').value, l: document.getElementById('l').value, e: document.getElementById('e').value };
-            const body = document.getElementById('body-view');
-            const core = document.getElementById('core');
-            const root = document.documentElement;
+        function takePhoto() {
+            const v = {
+                t: document.getElementById('t').value,
+                p: document.getElementById('p').value,
+                l: document.getElementById('l').value,
+                e: document.getElementById('e').value
+            };
 
-            // 1. 語意深度計算 (聯繫測試)
-            let energy = 30;
-            let stability = 100;
-            let hue = 190;
+            const bg = document.getElementById('bg-layer');
+            const sprite = document.getElementById('sprite-layer');
+            const effect = document.getElementById('effect-layer');
+            const frame = document.getElementById('photo-frame');
 
-            // 能量偵測
-            if (v.e.includes("大叫") || v.e.includes("爆炸") || v.e.includes("火")) energy = 98;
-            if (v.e.includes("睡") || v.e.includes("靜")) energy = 5;
+            // 1. 生活場景邏輯：根據「地點」換背景 (Emoji 模擬，可換成圖片)
+            if (v.l.includes("公園")) bg.style.background = "#95afc0";
+            else if (v.l.includes("海")) bg.style.background = "#70a1ff";
+            else if (v.l.includes("廚房")) bg.style.background = "#f7d794";
+            else bg.style.background = "#d1d8e0";
 
-            // 衝突偵測 (如: 雪人 + 太陽)
-            if ((v.p.includes("雪") && v.l.includes("火")) || (v.p.includes("雪") && v.l.includes("太陽"))) {
-                stability = 10;
-                energy = 80;
-            }
+            // 2. 角色邏輯：根據「人物」換主角 (用 Emoji 讓一年級更有感)
+            if (v.p.includes("貓")) sprite.innerText = "🐱";
+            else if (v.p.includes("狗")) sprite.innerText = "🐶";
+            else if (v.p.includes("妹") || v.p.includes("姐")) sprite.innerText = "👧";
+            else if (v.p.includes("哥") || v.p.includes("弟")) sprite.innerText = "👦";
+            else if (v.p.includes("媽")) sprite.innerText = "👩";
+            else sprite.innerText = "👤";
 
-            // 2. 視覺突變實作
-            root.style.setProperty('--h', hue + (energy * 2));
-            document.getElementById('bar-e').style.width = energy + '%';
-            document.getElementById('bar-s').style.width = stability + '%';
-            document.getElementById('bar-d').style.width = Math.random() * 100 + '%';
+            // 3. 事件邏輯：根據「動作」加特效
+            if (v.e.includes("跑") || v.e.includes("跳")) effect.innerText = "💨 ✨";
+            else if (v.e.includes("睡")) { effect.innerText = "💤"; sprite.style.transform = "translateX(-50%) rotate(90deg)"; }
+            else if (v.e.includes("吃")) effect.innerText = "🍰 🍎";
+            else effect.innerText = "";
 
-            // 💥 強烈衝擊邏輯
-            if (energy > 90 || stability < 20) {
-                // 現實崩解：反轉顏色
-                body.classList.add('overload');
-                body.style.animation = "shake 0.1s infinite";
-                root.style.setProperty('--glitch-op', '1');
-                core.style.transform = "scale(5)"; // 極度擴張
-                document.getElementById('status-text').innerText = "CRITICAL_ERROR: REALITY_COLLAPSE";
-                
-                // 3秒後自動恢復 (增加回饋感)
-                setTimeout(() => {
-                    body.classList.remove('overload');
-                    body.style.animation = "none";
-                    root.style.setProperty('--glitch-op', '0');
-                    core.style.transform = "scale(1)";
-                    document.getElementById('status-text').innerText = "CORE_STATUS: RECOVERED";
-                }, 2000);
-            } else {
-                core.style.transform = `scale(${1 + (energy / 100)})`;
-                document.getElementById('status-text').innerText = "CORE_STATUS: PROCESSING";
-            }
+            // 4. 時間邏輯：根據「時間」調亮度
+            if (v.t.includes("晚") || v.t.includes("夜")) bg.style.filter = "brightness(0.4)";
+            else bg.style.filter = "brightness(1)";
+
+            // 5. 語意呈現
+            document.getElementById('caption').innerText = `${v.t}的${v.p}在${v.l}${v.e}`;
+            
+            // 隨機搖動相框增加趣味
+            frame.style.transform = `rotate(${(Math.random()-0.5)*10}deg) scale(1.05)`;
+            setTimeout(() => frame.style.transform = `rotate(${(Math.random()-0.5)*5}deg)`, 300);
         }
     </script>
 </body>
