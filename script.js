@@ -103,6 +103,7 @@ function startRecognition() {
     const originalWord = document.getElementById('modal-text').innerText;
     const aiBtn = document.getElementById('ai-btn');
 
+    // 1. 視覺回饋
     aiBtn.innerText = "🎤 正在聽...請接龍";
     aiBtn.style.background = "#e53e3e"; 
 
@@ -110,34 +111,40 @@ function startRecognition() {
 
     recognition.onresult = (event) => {
         const studentSpeech = event.results[0][0].transcript;
-        
+        console.log("學生說了:", studentSpeech);
+
         if (studentSpeech.includes(originalWord)) {
-            // 1. 加分
+            // ✅ 加分
             players[turn].score += 10;
             document.getElementById('s' + (turn + 1)).innerText = players[turn].score;
 
-            // 2. 獲取原本的 AI 開頭文字 (過濾掉 HTML 標籤)
+            // ✅ 核心：合併文字（不關閉視窗！）
             const starterText = document.getElementById('ai-sentence-text').innerText.replace("故事開始：", "");
-
-            // 3. 【核心改變】將兩者合併並顯示在畫面上，不關閉視窗
+            
+            // 讓文字變色並連在一起
             document.getElementById('ai-sentence-text').innerHTML = 
                 `<span style="color: #718096;">${starterText}</span><br>` +
-                `<span style="color: #2b6cb0; font-weight: bold; font-size: 1.2em;">${studentSpeech}</span>`;
+                `<span style="color: #2b6cb0; font-weight: bold; font-size: 1.2em;">你的接龍：${studentSpeech}</span>`;
             
+            // ✅ 改變按鈕狀態，但不自動關窗
             aiBtn.innerText = "✨ 接龍成功！";
             aiBtn.style.background = "#48bb78";
 
-            // 4. 修改「我讀好了」按鈕，讓它變成「完成這段創作」
+            // 提醒玩家按下面的按鈕結束
             const doneBtn = document.getElementById('done-btn');
-            doneBtn.innerText = "🚀 完成這段創作，下一步";
+            doneBtn.innerText = "🚀 點我完成這段創作";
             doneBtn.style.background = "#3182ce";
-            doneBtn.style.animation = "pulse 1s infinite"; // 加個小動畫提醒學生按
 
         } else {
-            alert(`接龍裡要包含「${originalWord}」喔！你剛才說的是：「${studentSpeech}」`);
+            alert(`接龍裡要包含「${originalWord}」喔！你說的是：「${studentSpeech}」`);
             aiBtn.innerText = "🎤 再試一次";
             aiBtn.style.background = "#5d4037";
         }
+    };
+
+    recognition.onerror = () => {
+        aiBtn.innerText = "🎤 錄音失敗，請點擊重試";
+        aiBtn.style.background = "#5d4037";
     };
 }
 
