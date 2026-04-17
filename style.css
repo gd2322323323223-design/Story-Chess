@@ -113,5 +113,19 @@ body {
     cursor: pointer;
 }
 
-#ai-btn { padding: 12px; background: #5d4037; color: white; border: none; border-radius: 15px; font-size: 18px; font-weight: bold; cursor: pointer; }
+#ai-btn {
+    padding: 15px;
+    background: #5d4037;
+    color: white;
+    border: none;
+    border-radius: 15px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.3s;
+}
+
+#ai-btn:active {
+    transform: scale(0.95); /* 按下去會有縮小效果，感覺更好 */
+}
 #done-btn { padding: 12px; background: #48bb78; color: white; border: none; border-radius: 15px; font-size: 18px; font-weight: bold; cursor: pointer; }
