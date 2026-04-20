@@ -2,7 +2,7 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <title>四素連萌：成就紀錄版</title>
+    <title>四素連萌：寫作紀錄版</title>
     <style>
         :root { --t-color: #f1c40f; --p-color: #e91e63; --l-color: #2ecc71; --e-color: #3498db; }
         body { margin: 0; background: #0f172a; color: white; font-family: 'Microsoft JhengHei', sans-serif; display: flex; flex-direction: column; height: 100vh; align-items: center; justify-content: center; overflow: hidden; }
@@ -18,7 +18,6 @@
         }
         .guide-item.active { opacity: 1; animation: pulse-glow 1s infinite; background: rgba(255,255,255,0.1); }
 
-        /* 主遊戲區域：左右佈局 */
         #main-container { display: flex; gap: 30px; align-items: flex-start; }
 
         /* 左側：棋盤 */
@@ -29,19 +28,27 @@
             border: 1px solid rgba(255,255,255,0.1);
         }
 
-        /* 右側：紀錄框 */
+        /* 右側：紀錄框優化 */
         #history-panel {
-            width: 280px; height: 350px; background: rgba(0,0,0,0.3);
+            width: 320px; height: 350px; background: rgba(0,0,0,0.3);
             border-radius: 15px; border: 1px solid #334155;
             display: flex; flex-direction: column; padding: 15px; box-sizing: border-box;
         }
         #history-panel h3 { margin: 0 0 10px 0; font-size: 1rem; color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 5px; }
-        #history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 8px; }
+        
+        #history-list { 
+            flex: 1; overflow-y: auto; 
+            display: flex; flex-direction: column; /* 正常從上往下排 */
+            gap: 8px; 
+        }
+        
         .history-item { 
             background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px;
-            font-size: 0.85rem; border-left: 4px solid var(--t-color); animation: slideIn 0.3s ease-out;
+            font-size: 0.9rem; border-left: 4px solid var(--t-color); 
+            animation: slideIn 0.3s ease-out; color: #e2e8f0;
+            line-height: 1.4;
         }
-        @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 
         .tile { 
             background: #1e293b; border: 2px solid #334155; border-radius: 12px;
@@ -69,7 +76,7 @@
 <body>
 
 <div id="header">
-    <h2 style="margin:0;">四素連萌：語文養成</h2>
+    <h2 style="margin:0;">四素連萌：創意寫作</h2>
     <div class="guide-container">
         <div class="guide-item" id="g-T" style="--c: var(--t-color); color: var(--t-color);">時間</div>
         <div style="opacity:0.3">→</div>
@@ -83,11 +90,9 @@
 
 <div id="main-container">
     <div id="game-grid"></div>
-
     <div id="history-panel">
-        <h3>📜 探險日誌 (最近10句)</h3>
-        <div id="history-list">
-            </div>
+        <h3>📜 寫作日誌 (置頂最新)</h3>
+        <div id="history-list"></div>
     </div>
 </div>
 
@@ -110,6 +115,7 @@
     let gridData = [];
     let selectedIndices = [];
     let sentencesHistory = [];
+    let sentenceCount = 0; // 句子編號計數器
 
     function initGame() {
         gridData = [];
@@ -169,7 +175,7 @@
 
         if (clickedWord.type !== neededType) {
             sentenceBar.style.color = "#ff4757";
-            sentenceBar.innerText = `順序不對！請找「${typeNames[selectedIndices.length]}」`;
+            sentenceBar.innerText = `順序：時→人→地→事。請找「${typeNames[selectedIndices.length]}」`;
             setTimeout(() => { sentenceBar.style.color = "#38bdf8"; }, 1000);
             return;
         }
@@ -178,16 +184,26 @@
         render(); updateGuide();
 
         if (selectedIndices.length === 4) {
-            const sentence = selectedIndices.map(i => gridData[i].text).join("");
-            sentenceBar.innerText = "✨ " + sentence;
-            addHistory(sentence);
+            // 格式化句子：時間 + 逗號 + 人物 + 地點 + 事情 + 句號
+            const t = gridData[selectedIndices[0]].text;
+            const p = gridData[selectedIndices[1]].text;
+            const l = gridData[selectedIndices[2]].text;
+            const e = gridData[selectedIndices[3]].text;
+            
+            const fullSentence = `${t}，${p}${l}${e}。`;
+            sentenceBar.innerText = "✨ " + fullSentence;
+            addHistory(fullSentence);
             setTimeout(eliminate, 800);
         }
     }
 
     function addHistory(text) {
-        sentencesHistory.push(text);
-        if (sentencesHistory.length > 10) sentencesHistory.shift();
+        sentenceCount++;
+        const formattedText = `${sentenceCount}. ${text}`;
+        
+        // 將新句子加入陣列開頭 (Unshift)
+        sentencesHistory.unshift(formattedText);
+        if (sentencesHistory.length > 10) sentencesHistory.pop();
         
         historyList.innerHTML = '';
         sentencesHistory.forEach(s => {
