@@ -2,107 +2,58 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <title>四素連萌：視覺引導終極版</title>
+    <title>四素連萌：邏輯修復版</title>
     <style>
         :root { --t-color: #f1c40f; --p-color: #e91e63; --l-color: #2ecc71; --e-color: #3498db; }
+        body { margin: 0; background: #0f172a; color: white; font-family: 'Microsoft JhengHei', sans-serif; display: flex; height: 100vh; overflow: hidden; }
         
-        body { 
-            margin: 0; background: #0f172a; color: white; 
-            font-family: 'Microsoft JhengHei', sans-serif; 
-            display: flex; height: 100vh; overflow: hidden; 
-        }
-
-        /* 左側主遊戲區 */
-        #game-area { 
-            flex-grow: 1; display: flex; flex-direction: column; 
-            align-items: center; justify-content: center; padding: 20px;
-        }
-
+        #game-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
         #header { text-align: center; margin-bottom: 25px; }
         #header h1 { font-size: 2.2rem; margin: 0 0 10px 0; letter-spacing: 5px; color: #fff; }
 
-        /* ✅ 關鍵修改：補回發光和縮放的引導提示 */
         .guide-container { display: flex; gap: 20px; font-size: 1.5rem; font-weight: bold; justify-content: center; align-items: center; }
         .guide-item { opacity: 0.2; transition: 0.3s; padding: 5px 15px; border-radius: 8px; }
-        
         @keyframes pulse-glow {
             0% { transform: scale(1); box-shadow: 0 0 0px var(--c); }
             50% { transform: scale(1.15); box-shadow: 0 0 30px var(--c); opacity: 1; }
             100% { transform: scale(1); box-shadow: 0 0 0px var(--c); }
         }
-        .guide-item.active { 
-            opacity: 1; 
-            animation: pulse-glow 1s infinite; /* 不停縮放和發光 */
-            background: rgba(255,255,255,0.1);
-        }
+        .guide-item.active { opacity: 1; animation: pulse-glow 1s infinite; background: rgba(255,255,255,0.1); }
         
-        /* 棋盤 */
-        #game-grid { 
-            display: grid; grid-template-columns: repeat(4, 125px); 
-            grid-template-rows: repeat(4, 125px); gap: 15px; 
-            background: rgba(255,255,255,0.03); padding: 25px; border-radius: 25px;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);
-        }
-
-        /* 大字詞格 */
-        .tile { 
-            background: #1e293b; border: 2px solid #334155; border-radius: 18px;
-            display: flex; align-items: center; justify-content: center; 
-            font-weight: 900; cursor: pointer; transition: 0.2s;
-            user-select: none; color: #ffffff; text-align: center;
-            height: 125px; width: 125px; box-sizing: border-box;
-            padding: 10px; line-height: 1.1; letter-spacing: 2px;
-        }
-
-        .tile.selected.T { background: var(--t-color); color: #000; border-color: #fff; transform: scale(1.05); }
-        .tile.selected.P { background: var(--p-color); color: #000; border-color: #fff; transform: scale(1.05); }
-        .tile.selected.L { background: var(--l-color); color: #000; border-color: #fff; transform: scale(1.05); }
-        .tile.selected.E { background: var(--e-color); color: #000; border-color: #fff; transform: scale(1.05); }
-
+        #game-grid { display: grid; grid-template-columns: repeat(4, 125px); grid-template-rows: repeat(4, 125px); gap: 15px; background: rgba(255,255,255,0.03); padding: 25px; border-radius: 25px; }
+        .tile { background: #1e293b; border: 2px solid #334155; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-weight: 900; cursor: pointer; transition: 0.2s; height: 125px; width: 125px; box-sizing: border-box; padding: 10px; line-height: 1.1; letter-spacing: 2px; text-align: center; }
+        .tile.selected.T { background: var(--t-color); color: #000; border-color: #fff; }
+        .tile.selected.P { background: var(--p-color); color: #000; border-color: #fff; }
+        .tile.selected.L { background: var(--l-color); color: #000; border-color: #fff; }
+        .tile.selected.E { background: var(--e-color); color: #000; border-color: #fff; }
         .tile.T { border-top: 8px solid var(--t-color); }
         .tile.P { border-top: 8px solid var(--p-color); }
         .tile.L { border-top: 8px solid var(--l-color); }
         .tile.E { border-top: 8px solid var(--e-color); }
 
-        /* 提示反饋區 */
-        #feedback-area { margin-top: 30px; text-align: center; width: 80%; min-height: 120px; }
-        #sentence-bar { font-size: 2rem; font-weight: bold; min-height: 2.5rem; transition: 0.3s; color: #38bdf8; }
-        #logic-hint { 
-            margin-top: 15px; font-size: 1.4rem; padding: 12px 25px; 
-            border-radius: 12px; display: none; line-height: 1.4;
-            animation: fadeIn 0.5s;
-        }
+        #feedback-area { margin-top: 20px; text-align: center; width: 80%; min-height: 160px; display: flex; flex-direction: column; align-items: center; }
+        #sentence-bar { font-size: 2rem; font-weight: bold; margin-bottom: 10px; }
+        #logic-hint { font-size: 1.3rem; padding: 12px 25px; border-radius: 12px; display: none; line-height: 1.4; max-width: 800px; }
 
-        /* 右側日誌 - 優化佈局 */
-        #history-sidebar {
-            width: 480px; background: rgba(15, 23, 42, 0.98);
-            border-left: 2px solid #1e293b; display: flex; flex-direction: column;
-            padding: 35px; box-sizing: border-box;
+        /* ✅ 新增：再試一次按鈕樣式 */
+        #retry-btn {
+            margin-top: 15px; display: none; padding: 12px 40px; font-size: 1.5rem; font-weight: 900;
+            background: #ff4757; color: white; border: none; border-radius: 50px;
+            cursor: pointer; box-shadow: 0 10px 20px rgba(255, 71, 87, 0.4);
+            transition: 0.3s; animation: popUp 0.3s ease-out;
         }
-        #history-sidebar h3 { font-size: 1.6rem; color: #38bdf8; margin: 0 0 25px 0; }
-        
-        #history-list { 
-            flex: 1; 
-            overflow-y: auto; 
-            display: flex; 
-            flex-direction: column; /* 從上到下正常排列 */
-            gap: 15px; 
-            padding-right: 10px;
-        }
-        
-        .history-item { 
-            background: #1e293b; padding: 22px; border-radius: 18px;
-            font-size: 1.4rem; font-weight: bold; line-height: 1.5;
-            position: relative; border-left: 10px solid #334155;
-            animation: fadeIn 0.3s;
-        }
+        #retry-btn:hover { transform: scale(1.1); background: #ff6b81; }
+        @keyframes popUp { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        #history-sidebar { width: 480px; background: rgba(15, 23, 42, 0.98); border-left: 2px solid #1e293b; padding: 35px; display: flex; flex-direction: column; }
+        #history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .history-item { background: #1e293b; padding: 22px; border-radius: 18px; font-size: 1.4rem; font-weight: bold; border-left: 10px solid #334155; position: relative; }
         .history-item.pass { border-left-color: #2ecc71; }
         .history-item.fail { border-left-color: #e74c3c; background: rgba(231, 76, 60, 0.05); }
-        .status-badge { position: absolute; top: 10px; right: 15px; font-size: 0.85rem; padding: 4px 12px; border-radius: 20px; color: #fff; }
+        .status-badge { position: absolute; top: 10px; right: 15px; font-size: 0.8rem; padding: 4px 12px; border-radius: 20px; }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .shake { animation: shake 0.5s; }
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-10px); } 40% { transform: translateX(10px); } 60% { transform: translateX(-10px); } 80% { transform: translateX(10px); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-10px); } 80% { transform: translateX(10px); } }
     </style>
 </head>
 <body>
@@ -122,8 +73,9 @@
     </div>
     <div id="game-grid"></div>
     <div id="feedback-area">
-        <div id="sentence-bar">正在初始化...</div>
+        <div id="sentence-bar">請點選「時間」</div>
         <div id="logic-hint"></div>
+        <button id="retry-btn" onclick="retry()">再試一次 ↩</button>
     </div>
 </div>
 
@@ -133,7 +85,6 @@
 </div>
 
 <script>
-    // 1. 詞庫與邏輯定義
     const logicMap = {
         "在廚房": { can: ["煮麵", "洗碗", "吃早餐"], reason: "是用來煮食和用餐的地方。" },
         "在圖書館": { can: ["看書", "寫字", "溫習"], reason: "是需要保持安靜學習的地方。" },
@@ -143,7 +94,7 @@
 
     const wordBank = {
         T: ["清晨", "中午", "放假", "深夜", "明早", "黃昏"],
-        P: ["小狗", "媽媽", "老師", "弟弟", "小貓", "姐姐"],
+        P: ["小狗", "媽媽", "老師", "弟弟", "小貓", "爸爸"],
         L: ["在廚房", "在圖書館", "在公園", "在臥室"],
         E: ["跑步", "煮麵", "看書", "睡覺", "寫字", "玩耍"]
     };
@@ -151,25 +102,17 @@
     let gridData = [], selectedIndices = [], sentenceCount = 0;
     const types = ["T", "P", "L", "E"];
 
-    // 2. 初始化遊戲
     function initGame() {
         gridData = [];
-        for (let i = 0; i < 4; i++) {
-            types.forEach(t => gridData.push({ text: getRand(t), type: t }));
-        }
+        for (let i = 0; i < 4; i++) types.forEach(t => gridData.push({ text: getRand(t), type: t }));
         shuffle(gridData);
         render();
-        updateGuide(); // ✅ 初始化時更新引導發光
+        updateGuide();
     }
 
-    function getRand(type) {
-        const pool = wordBank[type];
-        return pool[Math.floor(Math.random() * pool.length)];
-    }
-
+    function getRand(type) { return wordBank[type][Math.floor(Math.random() * wordBank[type].length)]; }
     function shuffle(arr) { arr.sort(() => Math.random() - 0.5); }
 
-    // 3. 渲染畫面
     function render() {
         const grid = document.getElementById('game-grid');
         grid.innerHTML = '';
@@ -177,139 +120,93 @@
             const div = document.createElement('div');
             div.className = `tile ${data.type} ${selectedIndices.includes(index) ? 'selected' : ''}`;
             div.innerText = data.text;
-            
-            // 動態字體大小
-            const len = data.text.length;
-            div.style.fontSize = len > 3 ? "1.6rem" : (len === 3 ? "1.9rem" : "2.4rem");
-            
+            div.style.fontSize = data.text.length > 3 ? "1.6rem" : (data.text.length === 3 ? "1.9rem" : "2.4rem");
             div.onclick = () => handleClick(index);
             grid.appendChild(div);
         });
     }
 
-    // ✅ 關鍵代碼：補回更新引導標籤發光的函數
     function updateGuide() {
         const step = selectedIndices.length;
-        document.querySelectorAll('.guide-item').forEach((el, idx) => {
-            el.classList.toggle('active', idx === step);
-        });
-        
+        document.querySelectorAll('.guide-item').forEach((el, idx) => el.classList.toggle('active', idx === step));
         if (step < 4) {
-            document.getElementById('sentence-bar').innerText = `請選擇一個「${typeName(types[step])}」詞語`;
+            document.getElementById('sentence-bar').innerText = `請選擇「${{T:"時間", P:"人物", L:"地點", E:"事情"}[types[step]]}」`;
             document.getElementById('sentence-bar').style.color = "#38bdf8";
         }
     }
 
-    function typeName(t) {
-        return {T:"時間", P:"人物", L:"地點", E:"事情"}[t];
-    }
-
-    // 4. 點擊處理
     function handleClick(index) {
-        const clicked = gridData[index];
-        const step = selectedIndices.length;
-
-        // 取消選取（只限最後一個）
+        if (selectedIndices.length >= 4 && !selectedIndices.includes(index)) return;
         if (selectedIndices.includes(index)) {
-            if (index === selectedIndices[step - 1]) {
+            if (index === selectedIndices[selectedIndices.length - 1]) {
                 selectedIndices.pop();
-                resetUI();
-                render();
-                updateGuide(); // ✅ 取消選取後，引導回到前一步發光
+                document.getElementById('retry-btn').style.display = "none";
+                document.getElementById('logic-hint').style.display = "none";
+                render(); updateGuide();
             }
             return;
         }
-
-        // 強制按順序
-        if (step >= 4 || clicked.type !== types[step]) return;
+        if (gridData[index].type !== types[selectedIndices.length]) return;
 
         selectedIndices.push(index);
-        resetUI();
-        render();
-        updateGuide(); // ✅ 選取後，引導下一步發光
+        render(); updateGuide();
 
-        if (selectedIndices.length === 4) {
-            checkLogic();
-        }
+        if (selectedIndices.length === 4) checkLogic();
     }
 
-    // 5. 邏輯檢查
     function checkLogic() {
         const s = selectedIndices.map(i => gridData[i]);
         const loc = s[2].text;
         const act = s[3].text;
         const sentence = `${s[0].text}，${s[1].text}${loc}${act}。`;
         
-        let isPass = false;
-        let hint = "";
-
-        if (logicMap[loc].can.includes(act)) {
-            isPass = true;
-            hint = "✨ 太棒了！這句話既通順又合理。";
-        } else {
-            isPass = false;
-            hint = `🤔 想一想：${loc.replace("在","")}是用來${logicMap[loc].reason}在那裡「${act}」好像不符合常理呢！`;
-        }
+        let isPass = logicMap[loc].can.includes(act);
+        let hint = isPass ? "✨ 太棒了！邏輯非常合理。" : `🤔 想一想：${loc.replace("在","")}是用來${logicMap[loc].reason}在那裡「${act}」好像不合常理呢！`;
 
         sentenceCount++;
-        displayResult(sentence, isPass, hint);
-    }
-
-    function displayResult(sentence, isPass, hint) {
         const bar = document.getElementById('sentence-bar');
         const hintDiv = document.getElementById('logic-hint');
-        
+        const btn = document.getElementById('retry-btn');
+
         bar.innerText = sentence;
         bar.style.color = isPass ? "#2ecc71" : "#e74c3c";
-        
         hintDiv.innerText = hint;
         hintDiv.style.display = "block";
-        hintDiv.style.background = isPass ? "rgba(46, 204, 113, 0.1)" : "rgba(231, 76, 60, 0.1)";
         hintDiv.style.color = isPass ? "#2ecc71" : "#ff4757";
 
         if (!isPass) {
+            btn.style.display = "block"; // ✅ 顯示再試一次按鈕
             document.getElementById('game-grid').classList.add('shake');
             setTimeout(() => document.getElementById('game-grid').classList.remove('shake'), 500);
         }
 
-        // ✅ 日誌從小到大排列，並滾動
         addToHistory(sentence, isPass, hint);
-        
-        if (isPass) {
-            setTimeout(eliminate, 2500);
-        }
+        if (isPass) setTimeout(eliminate, 2500);
     }
 
-    // ✅ 日誌从小到大排列的关键修改
+    // ✅ 再試一次的邏輯
+    function retry() {
+        selectedIndices = []; // 清空選擇
+        document.getElementById('retry-btn').style.display = "none";
+        document.getElementById('logic-hint').style.display = "none";
+        render();
+        updateGuide();
+    }
+
     function addToHistory(sentence, isPass, hint) {
         const list = document.getElementById('history-list');
         const item = document.createElement('div');
         item.className = `history-item ${isPass ? 'pass' : 'fail'}`;
-        item.innerHTML = `
-            <span class="status-badge" style="background:${isPass ? '#2ecc71':'#e74c3c'}">${isPass ? '邏輯正確':'邏輯待考'}</span>
-            ${sentenceCount}. ${sentence}
-            <div style="font-size: 1rem; color: #94a3b8; margin-top: 8px; font-weight: normal;">${hint}</div>
-        `;
-        
-        // 使用 appendChild，新生成的句子會被放到末尾 (實現 1 > 2 > 3 排序)
+        item.innerHTML = `<span class="status-badge" style="background:${isPass?'#2ecc71':'#e74c3c'}">${isPass?'選輯正確':'邏輯待考'}</span>${sentenceCount}. ${sentence}<div style="font-size: 1rem; color: #94a3b8; margin-top: 8px; font-weight: normal;">${hint}</div>`;
         list.appendChild(item);
-
-        // 自動滾動到底部
         list.scrollTop = list.scrollHeight;
     }
 
-    function resetUI() {
-        document.getElementById('logic-hint').style.display = "none";
-    }
-
     function eliminate() {
-        selectedIndices.forEach(idx => {
-            gridData[idx] = { text: getRand(gridData[idx].type), type: gridData[idx].type };
-        });
+        selectedIndices.forEach(idx => gridData[idx] = { text: getRand(gridData[idx].type), type: gridData[idx].type });
         selectedIndices = [];
-        resetUI();
-        render();
-        updateGuide(); // ✅ 重置遊戲後，回到「時間」發光
+        document.getElementById('logic-hint').style.display = "none";
+        render(); updateGuide();
     }
 
     initGame();
