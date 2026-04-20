@@ -2,95 +2,161 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <title>我的生活拍立得</title>
+    <title>語意棋盤：寵物幻境雛形</title>
     <style>
-        body { margin: 0; background: #f0f0f0; font-family: "MSung", "微軟正黑體", sans-serif; display: flex; flex-direction: column; align-items: center; }
+        :root { --p-color: #00f2fe; }
+        body { margin: 0; background: #0a0a10; color: white; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
-        /* 拍立得相框 */
-        #photo-frame {
-            width: 400px; height: 500px; background: white; margin-top: 50px;
-            padding: 15px 15px 60px 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            position: relative; overflow: hidden; transform: rotate(-2deg);
-            transition: all 0.5s ease;
+        #game-container { flex: 1; display: grid; grid-template-columns: 1fr 350px; gap: 20px; padding: 20px; }
+
+        /* 左側：棋盤區 */
+        #board { 
+            background: rgba(255,255,255,0.05); border: 2px solid #333; 
+            display: grid; grid-template-columns: repeat(5, 1fr); 
+            grid-template-rows: repeat(5, 1fr); gap: 5px; padding: 10px;
+            border-radius: 15px; position: relative;
         }
+        .cell { 
+            background: rgba(0,0,0,0.3); border: 1px solid #222; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center; font-size: 0.9rem;
+            cursor: pointer; transition: 0.3s; color: #666;
+        }
+        .cell.active { background: var(--p-color); color: #000; font-weight: bold; box-shadow: 0 0 15px var(--p-color); border: none; }
 
-        /* 內容層疊 */
-        #bg-layer { position: absolute; top: 15px; left: 15px; right: 15px; height: 380px; background: #e0e0e0; transition: 0.5s; background-size: cover; }
-        #sprite-layer { position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); font-size: 100px; transition: 0.5s; }
-        #effect-layer { position: absolute; inset: 15px; pointer-events: none; display: flex; justify-content: center; align-items: center; font-size: 40px; }
+        /* 右側：寵物與顯示區 */
+        #display-panel { 
+            background: rgba(0,0,0,0.6); border-radius: 15px; padding: 20px;
+            display: flex; flex-direction: column; align-items: center; border: 1px solid #333;
+        }
+        #pet-canvas {
+            width: 200px; height: 200px; background: var(--p-color); 
+            border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+            filter: blur(20px); box-shadow: 0 0 40px var(--p-color);
+            margin-top: 40px; animation: morph 5s infinite alternate;
+        }
+        #story-box { margin-top: 40px; font-size: 1rem; line-height: 1.6; color: #ccc; text-align: center; }
 
-        /* 輸入區 */
-        .controls { margin-top: 40px; background: white; padding: 20px; border-radius: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
-        .input-box { display: flex; flex-direction: column; }
-        label { font-size: 12px; color: #888; margin-bottom: 5px; }
-        input { border: 1px solid #ddd; padding: 10px; border-radius: 5px; font-size: 16px; }
-        button { grid-column: span 2; padding: 15px; background: #ffcc00; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 18px; }
-        
-        #caption { position: absolute; bottom: 20px; width: 100%; text-align: center; font-size: 18px; color: #444; font-weight: bold; }
+        /* 底部：控制區 */
+        #controls { 
+            height: 180px; background: #000; border-top: 1px solid #333;
+            padding: 20px; display: flex; flex-direction: column; gap: 10px;
+        }
+        .word-bank { display: flex; gap: 10px; overflow-x: auto; padding: 10px 0; }
+        .word-chip { 
+            padding: 8px 15px; background: #222; border: 1px solid var(--p-color); 
+            border-radius: 20px; cursor: pointer; white-space: nowrap; font-size: 0.9rem;
+        }
+        .word-chip:hover { background: var(--p-color); color: #000; }
+        .type-label { font-size: 0.8rem; color: var(--p-color); font-weight: bold; margin-bottom: 5px; }
+
+        @keyframes morph { 
+            0% { border-radius: 40% 60% 70% 30%; transform: scale(1); }
+            100% { border-radius: 60% 40% 30% 70%; transform: scale(1.1); }
+        }
     </style>
 </head>
 <body>
 
-    <div id="photo-frame">
-        <div id="bg-layer"></div>
-        <div id="sprite-layer">❓</div>
-        <div id="effect-layer"></div>
-        <div id="caption">點擊下方按鈕拍照</div>
+<div id="game-container">
+    <div id="board">
+        </div>
+
+    <div id="display-panel">
+        <div id="status">寵物心情：穩定</div>
+        <div id="pet-canvas"></div>
+        <div id="story-box">請在棋盤上鋪設語意...</div>
+        <button id="snap-btn" style="margin-top:auto; padding:10px 20px; display:none;">📸 存入探險相簿</button>
     </div>
+</div>
 
-    <div class="controls">
-        <div class="input-box"><label>1. 什麼時候</label><input type="text" id="t" placeholder="例如：早上"></div>
-        <div class="input-box"><label>2. 誰</label><input type="text" id="p" placeholder="例如：小貓"></div>
-        <div class="input-box"><label>3. 在哪裡</label><input type="text" id="l" placeholder="例如：在公園"></div>
-        <div class="input-box"><label>4. 做什麼</label><input type="text" id="e" placeholder="例如：跑跳"></div>
-        <button onclick="takePhoto()">📸 拍下一張生活照</button>
+<div id="controls">
+    <div>
+        <div class="type-label">選擇一個詞語放入棋盤：</div>
+        <div class="word-bank" id="words">
+            </div>
     </div>
+</div>
 
-    <script>
-        function takePhoto() {
-            const v = {
-                t: document.getElementById('t').value,
-                p: document.getElementById('p').value,
-                l: document.getElementById('l').value,
-                e: document.getElementById('e').value
-            };
+<script>
+    const board = document.getElementById('board');
+    const wordsContainer = document.getElementById('words');
+    const storyBox = document.getElementById('story-box');
+    const root = document.documentElement;
 
-            const bg = document.getElementById('bg-layer');
-            const sprite = document.getElementById('sprite-layer');
-            const effect = document.getElementById('effect-layer');
-            const frame = document.getElementById('photo-frame');
+    let currentSelectedWord = null;
+    let placedSentences = []; // 紀錄已放置的組合
 
-            // 1. 生活場景邏輯：根據「地點」換背景 (Emoji 模擬，可換成圖片)
-            if (v.l.includes("公園")) bg.style.background = "#95afc0";
-            else if (v.l.includes("海")) bg.style.background = "#70a1ff";
-            else if (v.l.includes("廚房")) bg.style.background = "#f7d794";
-            else bg.style.background = "#d1d8e0";
+    // 1. 準備基礎詞庫 (生活化內容)
+    const wordBank = [
+        { text: "清晨", type: "T", color: "#f1c40f" },
+        { text: "深夜", type: "T", color: "#34495e" },
+        { text: "小狗", type: "P", color: "#e67e22" },
+        { text: "媽媽", type: "P", color: "#e91e63" },
+        { text: "公園", type: "L", color: "#2ecc71" },
+        { text: "廚房", type: "L", color: "#d35400" },
+        { text: "跑步", type: "E", color: "#3498db" },
+        { text: "做飯", type: "E", color: "#9b59b6" }
+    ];
 
-            // 2. 角色邏輯：根據「人物」換主角 (用 Emoji 讓一年級更有感)
-            if (v.p.includes("貓")) sprite.innerText = "🐱";
-            else if (v.p.includes("狗")) sprite.innerText = "🐶";
-            else if (v.p.includes("妹") || v.p.includes("姐")) sprite.innerText = "👧";
-            else if (v.p.includes("哥") || v.p.includes("弟")) sprite.innerText = "👦";
-            else if (v.p.includes("媽")) sprite.innerText = "👩";
-            else sprite.innerText = "👤";
+    // 2. 初始化棋盤
+    for (let i = 0; i < 25; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.innerText = i + 1;
+        cell.onclick = () => placeWord(cell);
+        board.appendChild(cell);
+    }
 
-            // 3. 事件邏輯：根據「動作」加特效
-            if (v.e.includes("跑") || v.e.includes("跳")) effect.innerText = "💨 ✨";
-            else if (v.e.includes("睡")) { effect.innerText = "💤"; sprite.style.transform = "translateX(-50%) rotate(90deg)"; }
-            else if (v.e.includes("吃")) effect.innerText = "🍰 🍎";
-            else effect.innerText = "";
+    // 3. 初始化詞庫
+    wordBank.forEach(w => {
+        const chip = document.createElement('div');
+        chip.className = 'word-chip';
+        chip.innerText = w.text;
+        chip.onclick = () => {
+            currentSelectedWord = w;
+            // 高亮選中的詞
+            document.querySelectorAll('.word-chip').forEach(c => c.style.background = '#222');
+            chip.style.background = w.color;
+        };
+        wordsContainer.appendChild(chip);
+    });
 
-            // 4. 時間邏輯：根據「時間」調亮度
-            if (v.t.includes("晚") || v.t.includes("夜")) bg.style.filter = "brightness(0.4)";
-            else bg.style.filter = "brightness(1)";
-
-            // 5. 語意呈現
-            document.getElementById('caption').innerText = `${v.t}的${v.p}在${v.l}${v.e}`;
-            
-            // 隨機搖動相框增加趣味
-            frame.style.transform = `rotate(${(Math.random()-0.5)*10}deg) scale(1.05)`;
-            setTimeout(() => frame.style.transform = `rotate(${(Math.random()-0.5)*5}deg)`, 300);
+    // 4. 下棋邏輯
+    function placeWord(cell) {
+        if (!currentSelectedWord) {
+            alert("請先選擇底部的詞語！");
+            return;
         }
-    </script>
+        
+        cell.innerText = currentSelectedWord.text;
+        cell.className = 'cell active';
+        cell.style.setProperty('--p-color', currentSelectedWord.color);
+        
+        // 跨感官轉譯模擬：改變寵物顏色
+        root.style.setProperty('--p-color', currentSelectedWord.color);
+
+        updateStory(currentSelectedWord.text);
+        currentSelectedWord = null; // 重置選擇
+    }
+
+    // 5. 語意補完模擬
+    function updateStory(newWord) {
+        // 這邊未來可以接入 GPT API 做細節填充
+        const feedback = [
+            `你添加了「${newWord}」，幻境正在改變...`,
+            `寵物感受到了「${newWord}」的氣息。`,
+            `空間開始出現「${newWord}」的細節...`
+        ];
+        storyBox.innerText = feedback[Math.floor(Math.random() * feedback.length)];
+        
+        // 簡單邏輯：如果棋盤上有字，顯示產圖按鈕
+        document.getElementById('snap-btn').style.display = 'block';
+    }
+
+    document.getElementById('snap-btn').onclick = () => {
+        alert("正在請求 AI 插畫師繪製今日探險照片... (API 連接預留位)");
+    };
+
+</script>
 </body>
 </html>
