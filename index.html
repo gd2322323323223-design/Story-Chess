@@ -2,11 +2,29 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <title>四素連萌：4x4 精準訓練版</title>
+    <title>四素連萌：動態引導版</title>
     <style>
         :root { --t-color: #f1c40f; --p-color: #e91e63; --l-color: #2ecc71; --e-color: #3498db; }
-        body { margin: 0; background: #0f172a; color: white; font-family: 'Microsoft JhengHei', sans-serif; display: flex; flex-direction: column; height: 100vh; align-items: center; justify-content: center; }
+        body { margin: 0; background: #0f172a; color: white; font-family: 'Microsoft JhengHei', sans-serif; display: flex; flex-direction: column; height: 100vh; align-items: center; justify-content: center; overflow: hidden; }
         
+        /* 標題與動態提示 */
+        #header { text-align: center; margin-bottom: 20px; }
+        .guide-container { display: flex; gap: 15px; margin-top: 10px; font-size: 1.1rem; font-weight: bold; }
+        .guide-item { opacity: 0.3; transition: 0.3s; padding: 5px 10px; border-radius: 5px; }
+        
+        /* 縮放發光動畫 */
+        @keyframes pulse-glow {
+            0% { transform: scale(1); box-shadow: 0 0 0px var(--c); }
+            50% { transform: scale(1.2); box-shadow: 0 0 20px var(--c); opacity: 1; }
+            100% { transform: scale(1); box-shadow: 0 0 0px var(--c); }
+        }
+        .guide-item.active { 
+            opacity: 1; 
+            animation: pulse-glow 1s infinite;
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* 棋盤 */
         #game-grid { 
             display: grid; grid-template-columns: repeat(4, 85px); 
             grid-template-rows: repeat(4, 85px); gap: 12px; 
@@ -17,82 +35,83 @@
         .tile { 
             background: #1e293b; border: 2px solid #334155; border-radius: 12px;
             display: flex; align-items: center; justify-content: center; 
-            font-size: 1rem; cursor: pointer; transition: all 0.2s;
+            font-size: 1rem; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             user-select: none; position: relative; color: #cbd5e1; text-align: center;
         }
 
-        .tile.selected { transform: scale(1.1); color: #fff; border-color: #fff; z-index: 10; }
+        /* 消除動畫 */
+        .tile.pop { transform: scale(0); opacity: 0; }
+
+        .tile.selected { transform: scale(1.1); color: #fff; border-color: #fff; z-index: 10; box-shadow: 0 0 20px rgba(255,255,255,0.5); }
         .tile.selected.T { background: var(--t-color); color: #000; }
         .tile.selected.P { background: var(--p-color); color: #000; }
         .tile.selected.L { background: var(--l-color); color: #000; }
         .tile.selected.E { background: var(--e-color); color: #000; }
 
-        /* 類型提示線 */
         .tile.T { border-top: 4px solid var(--t-color); }
         .tile.P { border-top: 4px solid var(--p-color); }
         .tile.L { border-top: 4px solid var(--l-color); }
         .tile.E { border-top: 4px solid var(--e-color); }
 
-        #sentence-container { margin-top: 30px; display: flex; gap: 10px; }
-        .slot {
-            width: 80px; height: 40px; border: 2px dashed #334155; border-radius: 8px;
-            display: flex; align-items: center; justify-content: center; font-size: 0.9rem; color: #475569;
-        }
-        .slot.active { border-color: #fff; color: #fff; border-style: solid; font-weight: bold; }
-
-        #hint-box { margin-top: 20px; height: 25px; color: #38bdf8; font-weight: bold; }
+        #sentence-bar { margin-top: 30px; min-height: 40px; color: #38bdf8; font-size: 1.2rem; font-weight: bold; letter-spacing: 2px; }
     </style>
 </head>
 <body>
 
-<div id="header" style="text-align: center; margin-bottom: 20px;">
-    <h2 style="margin:0;">四素連萌 (4x4)</h2>
-    <p style="color:#64748b; font-size: 0.9rem;">順序：時間 → 人物 → 地點 → 事情</p>
+<div id="header">
+    <h2 style="margin:0;">四素連萌：無限挑戰</h2>
+    <div class="guide-container">
+        <div class="guide-item" id="g-T" style="--c: var(--t-color); color: var(--t-color);">時間</div>
+        <div style="opacity:0.3">→</div>
+        <div class="guide-item" id="g-P" style="--c: var(--p-color); color: var(--p-color);">人物</div>
+        <div style="opacity:0.3">→</div>
+        <div class="guide-item" id="g-L" style="--c: var(--l-color); color: var(--l-color);">地點</div>
+        <div style="opacity:0.3">→</div>
+        <div class="guide-item" id="g-E" style="--c: var(--e-color); color: var(--e-color);">事情</div>
+    </div>
 </div>
 
 <div id="game-grid"></div>
 
-<div id="sentence-container">
-    <div class="slot" id="slot-0">時間</div>
-    <div class="slot" id="slot-1">人物</div>
-    <div class="slot" id="slot-2">地點</div>
-    <div class="slot" id="slot-3">事情</div>
-</div>
-
-<div id="hint-box">請點選「時間」詞語開始</div>
+<div id="sentence-bar">請找出「時間」開始造句</div>
 
 <script>
     const grid = document.getElementById('game-grid');
-    const hintBox = document.getElementById('hint-box');
-    const typesOrder = ["T", "P", "L", "E"];
+    const sentenceBar = document.getElementById('sentence-bar');
+    const types = ["T", "P", "L", "E"];
     const typeNames = ["時間", "人物", "地點", "事情"];
 
     const wordBank = {
-        T: ["清晨", "中午", "放假", "深夜"],
-        P: ["小狗", "媽媽", "老師", "弟弟"],
-        L: ["公園", "廚房", "海邊", "課室"],
-        E: ["跑步", "煮麵", "看書", "玩耍"]
+        T: ["清晨", "中午", "放假", "深夜", "明早", "黃昏"],
+        P: ["小狗", "媽媽", "老師", "弟弟", "小貓", "爸爸"],
+        L: ["公園", "廚房", "海邊", "課室", "花園", "浴室"],
+        E: ["跑步", "煮麵", "看書", "玩耍", "跳舞", "唱歌"]
     };
 
     let gridData = [];
     let selectedIndices = [];
 
+    // 初始化：填充 4x4 棋盤
     function initGame() {
-        // 確保 4x4 棋盤每種元素各 4 個
-        let pool = [];
-        typesOrder.forEach(type => {
-            wordBank[type].forEach(word => {
-                pool.push({
-                    text: type === "L" ? "在" + word : word,
-                    type: type
-                });
-            });
-        });
-        
-        // 隨機洗牌
-        gridData = pool.sort(() => Math.random() - 0.5);
-        selectedIndices = [];
+        for (let i = 0; i < 16; i++) {
+            gridData.push(generateRandomWord(types[i % 4])); // 初始分配均衡
+        }
+        shuffle(gridData);
         render();
+        updateGuide();
+    }
+
+    function generateRandomWord(type) {
+        const words = wordBank[type];
+        const text = words[Math.floor(Math.random() * words.length)];
+        return { text: type === "L" ? "在" + text : text, type: type };
+    }
+
+    function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[array[i]]];
+        }
     }
 
     function render() {
@@ -105,74 +124,65 @@
             div.onclick = () => handleClick(index);
             grid.appendChild(div);
         });
+    }
 
-        // 更新下方槽位
-        for(let i=0; i<4; i++) {
-            const slot = document.getElementById(`slot-${i}`);
-            if (selectedIndices[i] !== undefined) {
-                const data = gridData[selectedIndices[i]];
-                slot.innerText = data.text;
-                slot.className = `slot active`;
-                slot.style.background = getComputedStyle(document.documentElement).getPropertyValue(`--${data.type.toLowerCase()}-color`);
-            } else {
-                slot.innerText = typeNames[i];
-                slot.className = `slot`;
-                slot.style.background = 'transparent';
-            }
+    function updateGuide() {
+        const nextTypeIdx = selectedIndices.length;
+        document.querySelectorAll('.guide-item').forEach((el, idx) => {
+            el.classList.toggle('active', idx === nextTypeIdx);
+        });
+        if (nextTypeIdx < 4) {
+            sentenceBar.innerText = `下一步：請點選一個「${typeNames[nextTypeIdx]}」`;
         }
     }
 
     function handleClick(index) {
         const clickedWord = gridData[index];
-        const nextTypeNeeded = typesOrder[selectedIndices.length];
+        const neededType = types[selectedIndices.length];
 
-        // 1. 如果點擊已選中的（且是最後一個），則取消
         if (selectedIndices.includes(index)) {
             if (index === selectedIndices[selectedIndices.length - 1]) {
                 selectedIndices.pop();
-                updateHint();
+                updateGuide();
                 render();
             }
             return;
         }
 
-        // 2. 嚴格順序校驗
-        if (clickedWord.type !== nextTypeNeeded) {
-            hintBox.innerText = `❌ 順序錯誤！現在需要選「${typeNames[selectedIndices.length]}」`;
+        if (clickedWord.type !== neededType) {
+            sentenceBar.style.color = "red";
+            sentenceBar.innerText = `哎呀！順序不對，請先找「${typeNames[selectedIndices.length]}」`;
+            setTimeout(() => { sentenceBar.style.color = "#38bdf8"; updateGuide(); }, 1000);
             return;
         }
 
-        // 3. 符合順序，加入序列
         selectedIndices.push(index);
-        
-        if (selectedIndices.length === 4) {
-            hintBox.innerText = "🎉 成功組合！句子消除！";
-            setTimeout(eliminate, 800);
-        } else {
-            updateHint();
-        }
+        updateGuide();
         render();
-    }
 
-    function updateHint() {
-        hintBox.innerText = `請選擇「${typeNames[selectedIndices.length]}」詞語`;
+        if (selectedIndices.length === 4) {
+            const finalSentence = selectedIndices.map(i => gridData[i].text).join("");
+            sentenceBar.innerText = "✨ " + finalSentence;
+            setTimeout(eliminate, 1000);
+        }
     }
 
     function eliminate() {
-        // 將選中的詞變為空白或新詞（這裡簡單處理為直接刷新棋盤位置以維持 4x4）
-        // 實際遊戲中可以讓它們消失並掉落
-        selectedIndices.sort((a,b) => b-a).forEach(idx => {
-            gridData.splice(idx, 1);
-        });
-        
-        selectedIndices = [];
-        if (gridData.length === 0) {
-            hintBox.innerText = "🏆 太棒了！你清空了所有詞語！";
-            setTimeout(initGame, 2000);
-        } else {
-            updateHint();
-        }
-        render();
+        // 1. 播放消除動畫
+        const tiles = document.querySelectorAll('.tile');
+        selectedIndices.forEach(idx => tiles[idx].classList.add('pop'));
+
+        setTimeout(() => {
+            // 2. 核心邏輯：成功組合後，替換為新的隨機四素組合（確保棋盤始終有解）
+            const newWords = types.map(t => generateRandomWord(t));
+            selectedIndices.forEach((gridIdx, i) => {
+                gridData[gridIdx] = newWords[i];
+            });
+
+            selectedIndices = [];
+            render();
+            updateGuide();
+        }, 300);
     }
 
     initGame();
