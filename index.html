@@ -84,9 +84,18 @@
     const root = document.documentElement;
 
     let currentSelectedWord = null;
-    let placedSentences = []; // 紀錄已放置的組合
+    let boardState = Array(25).fill(null); // 紀錄棋盤狀態
 
-    // 1. 準備基礎詞庫 (生活化內容)
+    // 1. 增強版語義網：定義詞語之間的「強關聯」
+    const semanticAssociations = {
+        "媽媽": ["廚房", "做飯", "深夜"],
+        "小狗": ["公園", "跑步", "清晨"],
+        "清晨": ["公園", "跑步", "媽媽"],
+        "深夜": ["廚房", "做飯", "小狗"],
+        "公園": ["跑步", "小狗", "清晨"],
+        "廚房": ["做飯", "媽媽", "深夜"]
+    };
+
     const wordBank = [
         { text: "清晨", type: "T", color: "#f1c40f" },
         { text: "深夜", type: "T", color: "#34495e" },
@@ -99,63 +108,81 @@
     ];
 
     // 2. 初始化棋盤
+    const cells = [];
     for (let i = 0; i < 25; i++) {
         const cell = document.createElement('div');
         cell.className = 'cell';
-        cell.innerText = i + 1;
-        cell.onclick = () => placeWord(cell);
+        cell.dataset.index = i;
+        cell.innerText = "";
+        cell.onclick = () => playerMove(i);
         board.appendChild(cell);
+        cells.push(cell);
     }
 
-    // 3. 初始化詞庫
+    // 3. 玩家下棋
+    function playerMove(index) {
+        if (!currentSelectedWord || boardState[index]) return;
+
+        placeWordOnBoard(index, currentSelectedWord, "player");
+        
+        // 玩家下完後，延遲 1 秒觸發 AI 動作
+        storyBox.innerText = `AI 正在思考如何回應「${currentSelectedWord.text}」...`;
+        setTimeout(() => aiMove(index), 1000);
+        
+        currentSelectedWord = null;
+    }
+
+    // 4. AI 自動對弈邏輯 (核心！)
+    function aiMove(playerIndex) {
+        const playerWord = boardState[playerIndex].text;
+        const associations = semanticAssociations[playerWord];
+        
+        // AI 從關聯詞中選一個，並在玩家棋子周圍找空位
+        const aiChoiceText = associations[Math.floor(Math.random() * associations.length)];
+        const aiWord = wordBank.find(w => w.text === aiChoiceText);
+        
+        const neighborIndex = findEmptyNeighbor(playerIndex);
+        
+        if (neighborIndex !== null && aiWord) {
+            placeWordOnBoard(neighborIndex, aiWord, "ai");
+            storyBox.innerText = `AI 認為 ${playerWord} 與 ${aiWord.text} 有關，因此在旁邊鋪設了路徑！`;
+            root.style.setProperty('--p-color', aiWord.color); // 寵物顏色隨 AI 改變
+        } else {
+            storyBox.innerText = `AI 在沈思中，尚未找到合適的語義連接。`;
+        }
+    }
+
+    // 輔助功能：尋找鄰近的空位
+    function findEmptyNeighbor(index) {
+        const neighbors = [index-5, index+5, index-1, index+1].filter(i => i >= 0 && i < 25 && !boardState[i]);
+        return neighbors.length > 0 ? neighbors[Math.floor(Math.random() * neighbors.length)] : null;
+    }
+
+    // 統一畫線/放置邏輯
+    function placeWordOnBoard(index, word, owner) {
+        boardState[index] = word;
+        const cell = cells[index];
+        cell.innerText = word.text;
+        cell.className = `cell active ${owner}`;
+        cell.style.background = word.color;
+        if(owner === "ai") {
+            cell.style.boxShadow = "0 0 20px white";
+            cell.style.border = "2px solid white";
+        }
+    }
+
+    // 初始化詞庫按鈕
     wordBank.forEach(w => {
         const chip = document.createElement('div');
         chip.className = 'word-chip';
         chip.innerText = w.text;
         chip.onclick = () => {
             currentSelectedWord = w;
-            // 高亮選中的詞
-            document.querySelectorAll('.word-chip').forEach(c => c.style.background = '#222');
-            chip.style.background = w.color;
+            document.querySelectorAll('.word-chip').forEach(c => c.style.border = '1px solid #333');
+            chip.style.border = `2px solid ${w.color}`;
         };
         wordsContainer.appendChild(chip);
     });
-
-    // 4. 下棋邏輯
-    function placeWord(cell) {
-        if (!currentSelectedWord) {
-            alert("請先選擇底部的詞語！");
-            return;
-        }
-        
-        cell.innerText = currentSelectedWord.text;
-        cell.className = 'cell active';
-        cell.style.setProperty('--p-color', currentSelectedWord.color);
-        
-        // 跨感官轉譯模擬：改變寵物顏色
-        root.style.setProperty('--p-color', currentSelectedWord.color);
-
-        updateStory(currentSelectedWord.text);
-        currentSelectedWord = null; // 重置選擇
-    }
-
-    // 5. 語意補完模擬
-    function updateStory(newWord) {
-        // 這邊未來可以接入 GPT API 做細節填充
-        const feedback = [
-            `你添加了「${newWord}」，幻境正在改變...`,
-            `寵物感受到了「${newWord}」的氣息。`,
-            `空間開始出現「${newWord}」的細節...`
-        ];
-        storyBox.innerText = feedback[Math.floor(Math.random() * feedback.length)];
-        
-        // 簡單邏輯：如果棋盤上有字，顯示產圖按鈕
-        document.getElementById('snap-btn').style.display = 'block';
-    }
-
-    document.getElementById('snap-btn').onclick = () => {
-        alert("正在請求 AI 插畫師繪製今日探險照片... (API 連接預留位)");
-    };
 
 </script>
 </body>
