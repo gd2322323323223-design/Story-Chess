@@ -2,50 +2,57 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <title>四素連萌：看圖識字版</title>
+    <title>四素連萌：AI 語音寫作版</title>
     <style>
         :root { --t-color: #f1c40f; --p-color: #e91e63; --l-color: #2ecc71; --e-color: #3498db; }
         body { margin: 0; background: #0f172a; color: white; font-family: 'Microsoft JhengHei', sans-serif; display: flex; height: 100vh; overflow: hidden; }
         
-        /* 左側遊戲區 */
         #game-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
         
-        /* 圖片展示區 */
+        /* 圖片任務區 */
         #task-display {
-            width: 320px; height: 200px; background: #1e293b; border: 4px solid #38bdf8;
-            border-radius: 20px; margin-bottom: 20px; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; position: relative; overflow: hidden;
+            width: 350px; height: 180px; background: #1e293b; border: 4px solid #38bdf8;
+            border-radius: 20px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; position: relative;
         }
-        #task-img { width: 100%; height: 100%; object-fit: cover; }
-        #task-label { position: absolute; bottom: 0; background: rgba(56, 189, 248, 0.9); color: #000; width: 100%; text-align: center; font-weight: bold; padding: 5px 0; }
+        #task-text { font-size: 1.8rem; text-align: center; color: #fff; font-weight: bold; }
 
         .guide-container { display: flex; gap: 15px; margin-bottom: 15px; }
-        .guide-item { opacity: 0.3; font-size: 1.2rem; font-weight: bold; padding: 5px 10px; border-radius: 5px; }
-        .guide-item.active { opacity: 1; background: rgba(255,255,255,0.1); transform: scale(1.1); transition: 0.3s; }
+        .guide-item { opacity: 0.3; font-size: 1.2rem; font-weight: bold; }
+        .guide-item.active { opacity: 1; transform: scale(1.1); transition: 0.3s; }
 
         #game-grid { display: grid; grid-template-columns: repeat(4, 120px); gap: 12px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 20px; }
-        .tile { background: #1e293b; border: 2px solid #334155; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; height: 110px; width: 110px; text-align: center; padding: 5px; }
+        .tile { background: #1e293b; border: 2px solid #334155; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; height: 110px; width: 110px; text-align: center; }
         .tile.selected.T { background: var(--t-color); color: #000; }
         .tile.selected.P { background: var(--p-color); color: #000; }
         .tile.selected.L { background: var(--l-color); color: #000; }
         .tile.selected.E { background: var(--e-color); color: #000; }
         
-        #sentence-bar { margin-top: 20px; font-size: 1.8rem; font-weight: bold; min-height: 2.5rem; color: #38bdf8; }
-        #retry-btn { margin-top: 10px; padding: 10px 30px; font-size: 1.2rem; background: #ff4757; color: white; border: none; border-radius: 50px; cursor: pointer; display: none; }
+        #sentence-bar { margin-top: 20px; font-size: 1.8rem; font-weight: bold; color: #38bdf8; }
 
-        /* 右側日誌 */
+        /* ✅ AI 擴寫建議樣式 */
+        #ai-suggestion {
+            margin-top: 15px; background: rgba(56, 189, 248, 0.1); border: 1px dashed #38bdf8;
+            padding: 15px 25px; border-radius: 15px; max-width: 600px; display: none;
+            animation: slideUp 0.5s ease-out;
+        }
+        .ai-title { color: #38bdf8; font-size: 0.9rem; font-weight: bold; margin-bottom: 5px; display: flex; align-items: center; }
+        .ai-content { font-size: 1.2rem; color: #e2e8f0; line-height: 1.4; }
+
+        #retry-btn { margin-top: 15px; padding: 10px 30px; font-size: 1.2rem; background: #ff4757; color: white; border: none; border-radius: 50px; cursor: pointer; display: none; }
+
         #history-sidebar { width: 420px; background: #0b1120; border-left: 2px solid #1e293b; padding: 25px; display: flex; flex-direction: column; }
         #history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-        .history-item { background: #1e293b; padding: 15px; border-radius: 12px; font-size: 1.2rem; border-left: 6px solid #334155; }
-        .history-item.correct { border-left-color: #2ecc71; }
+        .history-item { background: #1e293b; padding: 15px; border-radius: 12px; border-left: 6px solid #2ecc71; }
+
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
 <div id="game-area">
     <div id="task-display">
-        <div id="task-text" style="font-size: 1.5rem; text-align: center; padding: 20px;">觀察圖片內容...</div>
-        <div id="task-label">目標任務</div>
+        <div id="task-text">載入中...</div>
+        <div style="position:absolute; top:-10px; left:10px; background:#38bdf8; color:#000; padding:2px 10px; border-radius:5px; font-size:0.8rem;">今日任務圖片</div>
     </div>
 
     <div class="guide-container">
@@ -58,30 +65,50 @@
     <div id="game-grid"></div>
     
     <div id="feedback-area">
-        <div id="sentence-bar">正在準備題目...</div>
-        <button id="retry-btn" onclick="resetSelection()">選錯了，再試一次</button>
+        <div id="sentence-bar">請找出對應的詞語</div>
+        
+        <div id="ai-suggestion">
+            <div class="ai-title">🤖 AI 老師的擴寫建議：</div>
+            <div id="ai-content" class="ai-content"></div>
+        </div>
+
+        <button id="retry-btn" onclick="resetSelection()">再試一次</button>
     </div>
 </div>
 
 <div id="history-sidebar">
-    <h3 style="color:#38bdf8">📜 識字寫作日誌</h3>
+    <h3 style="color:#38bdf8">📜 寫作日誌</h3>
     <div id="history-list"></div>
 </div>
 
 <script>
-    // 1. 定義任務庫（圖片 + 正確答案）
+    // 任務庫：增加擴寫內容 (expansion)
     const tasks = [
-        { imgText: "🍳 媽媽在廚房煮麵", ans: ["中午", "媽媽", "在廚房", "煮麵"] },
-        { imgText: "📖 老師在圖書館看書", ans: ["放假", "老師", "在圖書館", "看書"] },
-        { imgText: "🏃 小狗在公園跑步", ans: ["清晨", "小狗", "在公園", "跑步"] },
-        { imgText: "😴 弟弟在臥室睡覺", ans: ["深夜", "弟弟", "在臥室", "睡覺"] }
+        { 
+            imgText: "🍳 媽媽在廚房煮麵", 
+            ans: ["中午", "媽媽", "在廚房", "煮麵"],
+            expansion: "中午時分，辛苦的媽媽在充滿香氣的廚房裡，為全家人煮了一碗熱騰騰的麵。"
+        },
+        { 
+            imgText: "📖 老師在圖書館看書", 
+            ans: ["放假", "老師", "在圖書館", "看書"],
+            expansion: "放假的時候，安靜的圖書館裡，老師正全神貫注地閱讀一本有趣的圖畫書。"
+        },
+        { 
+            imgText: "🏃 小狗在公園跑步", 
+            ans: ["清晨", "小狗", "在公園", "跑步"],
+            expansion: "在空氣清新的清晨，活潑的小狗在綠油油的公園草地上快步跑來跑去。"
+        },
+        { 
+            imgText: "😴 弟弟在臥室睡覺", 
+            ans: ["深夜", "弟弟", "在臥室", "睡覺"],
+            expansion: "寂靜的深夜裡，可愛的弟弟在溫暖的臥室中，正蓋著被子甜甜地睡覺。"
+        }
     ];
 
     const wordBank = {
-        T: ["清晨", "中午", "放假", "深夜", "黃昏"],
-        P: ["小狗", "媽媽", "老師", "弟弟", "姐姐"],
-        L: ["在廚房", "在圖書館", "在公園", "在臥室"],
-        E: ["跑步", "煮麵", "看書", "睡覺", "寫字"]
+        T: ["清晨", "中午", "放假", "深夜"], P: ["小狗", "媽媽", "老師", "弟弟"],
+        L: ["在廚房", "在圖書館", "在公園", "在臥室"], E: ["跑步", "煮麵", "看書", "睡覺"]
     };
 
     let currentTask = null;
@@ -89,28 +116,18 @@
     const types = ["T", "P", "L", "E"];
 
     function initGame() {
-        // 隨機選一個任務
         currentTask = tasks[Math.floor(Math.random() * tasks.length)];
         document.getElementById('task-text').innerText = currentTask.imgText;
-
-        // 生成棋盤：包含正確答案 + 隨機干擾項
+        document.getElementById('ai-suggestion').style.display = "none";
         gridData = [];
-        // 加入正確答案
         currentTask.ans.forEach((word, i) => gridData.push({ text: word, type: types[i] }));
-        // 加入隨機干擾
-        for (let i = 0; i < 12; i++) {
-            const type = types[i % 4];
-            gridData.push({ text: getRand(type), type: type });
+        while(gridData.length < 16) {
+            const t = types[gridData.length % 4];
+            gridData.push({ text: wordBank[t][Math.floor(Math.random()*4)], type: t });
         }
-        
         shuffle(gridData);
         render();
         updateGuide();
-    }
-
-    function getRand(type) {
-        const pool = wordBank[type];
-        return pool[Math.floor(Math.random() * pool.length)];
     }
 
     function shuffle(arr) { arr.sort(() => Math.random() - 0.5); }
@@ -122,66 +139,78 @@
             const div = document.createElement('div');
             div.className = `tile ${data.type} ${selectedIndices.includes(index) ? 'selected' : ''}`;
             div.innerText = data.text;
-            div.style.fontSize = data.text.length > 2 ? "1.6rem" : "2.2rem";
             div.onclick = () => handleClick(index);
             grid.appendChild(div);
         });
     }
 
     function handleClick(index) {
-        const step = selectedIndices.length;
-        if (step >= 4 || selectedIndices.includes(index)) return;
-        if (gridData[index].type !== types[step]) return;
-
+        if (selectedIndices.length >= 4 || selectedIndices.includes(index)) return;
+        if (gridData[index].type !== types[selectedIndices.length]) return;
         selectedIndices.push(index);
-        render();
-        updateGuide();
-
+        render(); updateGuide();
         if (selectedIndices.length === 4) checkAnswer();
     }
 
+    // ✅ 語音朗讀與擴寫邏輯
     function checkAnswer() {
         const userAns = selectedIndices.map(i => gridData[i].text);
         const sentence = `${userAns[0]}，${userAns[1]}${userAns[2]}${userAns[3]}。`;
         const isCorrect = JSON.stringify(userAns) === JSON.stringify(currentTask.ans);
-
         const bar = document.getElementById('sentence-bar');
-        bar.innerText = sentence;
 
         if (isCorrect) {
+            bar.innerText = "✨ " + sentence;
             bar.style.color = "#2ecc71";
+            
+            // 1. AI 語音朗讀
+            speak(sentence);
+
+            // 2. 顯示 AI 擴寫建議
+            setTimeout(() => {
+                const sugg = document.getElementById('ai-suggestion');
+                document.getElementById('ai-content').innerText = currentTask.expansion;
+                sugg.style.display = "block";
+                speak("AI老師建議可以這樣寫：" + currentTask.expansion); // 同步朗讀建議
+            }, 800);
+
             sentenceCount++;
             addToHistory(sentence);
-            setTimeout(() => {
-                alert("太棒了！完全正確 ✨");
-                selectedIndices = [];
-                initGame();
-            }, 1000);
+            setTimeout(initGame, 8000); // 給予充足時間閱讀
         } else {
+            bar.innerText = "❌ 與圖片不符喔，再觀察看看！";
             bar.style.color = "#ff4757";
             document.getElementById('retry-btn').style.display = "block";
-            document.getElementById('sentence-bar').innerText += " (與圖片不符喔)";
         }
+    }
+
+    // AI 語音函數
+    function speak(text) {
+        window.speechSynthesis.cancel(); // 停止之前的朗讀
+        const msg = new SpeechSynthesisUtterance(text);
+        msg.lang = 'zh-HK'; // 可改為 'zh-CN'
+        msg.rate = 0.9;    // 語速稍微慢一點，方便一年級聽
+        window.speechSynthesis.speak(msg);
     }
 
     function resetSelection() {
         selectedIndices = [];
         document.getElementById('retry-btn').style.display = "none";
-        render();
-        updateGuide();
+        render(); updateGuide();
     }
 
     function updateGuide() {
         const step = selectedIndices.length;
         document.querySelectorAll('.guide-item').forEach((el, i) => el.classList.toggle('active', i === step));
-        if (step < 4) document.getElementById('sentence-bar').innerText = `找出圖片中的「${{T:"時間",P:"人物",L:"地點",E:"事情"}[types[step]]}」`;
     }
 
     function addToHistory(s) {
         const item = document.createElement('div');
-        item.className = "history-item correct";
+        item.className = "history-item";
         item.innerText = `${sentenceCount}. ${s}`;
-        document.getElementById('history-list').appendChild(item);
+        const list = document.getElementById('history-list');
+        list.appendChild(item);
+        list.scrollTop = list.scrollHeight;
     }
 
     initGame();
