@@ -2,145 +2,166 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <title>語意消除：四素連萌</title>
+    <title>語意消除：四素連萌 (回饋增強版)</title>
     <style>
-        :root { --p-color: #38bdf8; }
-        body { margin: 0; background: #0f172a; color: white; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; align-items: center; }
+        :root { --t-color: #f1c40f; --p-color: #e91e63; --l-color: #2ecc71; --e-color: #3498db; }
+        body { margin: 0; background: #0f172a; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; height: 100vh; align-items: center; justify-content: center; }
         
-        #header { padding: 20px; text-align: center; }
+        #header { margin-bottom: 20px; text-align: center; }
         #game-grid { 
-            display: grid; grid-template-columns: repeat(6, 70px); 
-            grid-template-rows: repeat(6, 70px); gap: 8px; 
-            background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px;
-            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            display: grid; grid-template-columns: repeat(6, 75px); 
+            grid-template-rows: repeat(6, 75px); gap: 10px; 
+            background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1);
         }
 
         .tile { 
-            background: #1e293b; border: 1px solid #334155; border-radius: 8px;
+            background: #1e293b; border: 2px solid #334155; border-radius: 12px;
             display: flex; align-items: center; justify-content: center; 
-            font-size: 0.85rem; cursor: pointer; transition: 0.2s;
-            user-select: none; position: relative;
+            font-size: 0.9rem; cursor: pointer; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            user-select: none; position: relative; color: #cbd5e1;
         }
-        .tile:hover { transform: scale(1.05); background: #334155; }
+
+        /* 選中狀態與序號提示 */
         .tile.selected { 
-            background: var(--p-color); color: #000; font-weight: bold;
-            box-shadow: 0 0 15px var(--p-color); transform: translateY(-5px);
+            transform: scale(1.1) translateY(-5px);
+            color: #fff; border-color: #fff; box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        .tile.selected::after {
+            content: attr(data-order);
+            position: absolute; top: -8px; right: -8px;
+            width: 24px; height: 24px; background: white; color: black;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
 
-        /* 不同詞性的邊框顏色 */
-        .type-T { border-bottom: 4px solid #f1c40f; } /* 時 */
-        .type-P { border-bottom: 4px solid #e91e63; } /* 人 */
-        .type-L { border-bottom: 4px solid #2ecc71; } /* 地 */
-        .type-E { border-bottom: 4px solid #3498db; } /* 事 */
+        /* 根據類型上色 */
+        .tile.T { border-bottom: 5px solid var(--t-color); }
+        .tile.P { border-bottom: 5px solid var(--p-color); }
+        .tile.L { border-bottom: 5px solid var(--l-color); }
+        .tile.E { border-bottom: 5px solid var(--e-color); }
 
-        #sentence-bar { 
-            margin-top: 30px; width: 460px; height: 60px;
-            background: rgba(0,0,0,0.4); border: 2px dashed #38bdf8;
-            border-radius: 30px; display: flex; align-items: center;
-            justify-content: center; font-size: 1.2rem; color: #38bdf8;
+        .tile.selected.T { background: var(--t-color); color: #000; }
+        .tile.selected.P { background: var(--p-color); color: #000; }
+        .tile.selected.L { background: var(--l-color); color: #000; }
+        .tile.selected.E { background: var(--e-color); color: #000; }
+
+        #sentence-container { 
+            margin-top: 40px; display: flex; gap: 10px; min-height: 50px; align-items: center;
         }
+        .sentence-slot {
+            width: 90px; height: 45px; border: 2px dashed #334155; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center; font-size: 0.9rem;
+            color: #475569; transition: 0.3s;
+        }
+        .sentence-slot.filled { border-style: solid; color: #fff; border-color: transparent; }
 
-        #pet-status { margin-top: 20px; font-size: 0.9rem; color: #94a3b8; }
+        #msg-box { margin-top: 20px; height: 20px; font-size: 0.9rem; color: #38bdf8; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div id="header">
-    <h2>語意消除實驗室</h2>
-    <p>依序點擊：時 → 人 → 地 → 事，連結生命養分</p>
+    <h2 style="margin:0; color:#38bdf8;">四素連萌：語意消除</h2>
+    <p style="color:#64748b;">請依序集齊：時間、人物、地點、事件</p>
 </div>
 
-<div id="game-grid" id="grid"></div>
+<div id="game-grid"></div>
 
-<div id="sentence-bar" id="current-sentence">請開始連結句子...</div>
+<div id="sentence-container">
+    <div class="sentence-slot" id="slot-T">時間</div>
+    <div class="sentence-slot" id="slot-P">人物</div>
+    <div class="sentence-slot" id="slot-L">地點</div>
+    <div class="sentence-slot" id="slot-E">事件</div>
+</div>
 
-<div id="pet-status">寵物正在觀察你的語法...</div>
+<div id="msg-box"></div>
 
 <script>
     const grid = document.getElementById('game-grid');
-    const sentenceBar = document.getElementById('current-sentence');
-    const statusText = document.getElementById('pet-status');
+    const msgBox = document.getElementById('msg-box');
 
     const wordBank = [
-        { text: "清晨", type: "T" }, { text: "深夜", type: "T" }, { text: "中午", type: "T" },
-        { text: "小狗", type: "P" }, { text: "媽媽", type: "P" }, { text: "老師", type: "P" },
-        { text: "公園", type: "L" }, { text: "廚房", type: "L" }, { text: "課室", type: "L" },
-        { text: "跑步", type: "E" }, { text: "煮麵", type: "E" }, { text: "看書", type: "E" }
+        { text: "清晨", type: "T" }, { text: "深夜", type: "T" }, { text: "中午", type: "T" }, { text: "放假", type: "T" },
+        { text: "小狗", type: "P" }, { text: "媽媽", type: "P" }, { text: "老師", type: "P" }, { text: "爸爸", type: "P" },
+        { text: "公園", type: "L" }, { text: "廚房", type: "L" }, { text: "課室", type: "L" }, { text: "海邊", type: "L" },
+        { text: "跑步", type: "E" }, { text: "煮麵", type: "E" }, { text: "看書", type: "E" }, { text: "玩耍", type: "E" }
     ];
 
-    let selectedTiles = [];
-    let gridData = []; // 儲存當前棋盤數據
+    let selectedTiles = []; // 存儲索引
+    let gridData = [];
 
-    // 1. 初始化棋盤 (6x6)
     function initGrid() {
-        grid.innerHTML = '';
-        gridData = [];
-        for (let i = 0; i < 36; i++) {
-            const randomWord = wordBank[Math.floor(Math.random() * wordBank.length)];
-            gridData.push({ ...randomWord, id: i });
-        }
-        renderGrid();
+        gridData = Array.from({length: 36}, () => wordBank[Math.floor(Math.random() * wordBank.length)]);
+        render();
     }
 
-    // 2. 渲染棋盤
-    function renderGrid() {
+    function render() {
         grid.innerHTML = '';
         gridData.forEach((data, index) => {
             const div = document.createElement('div');
-            div.className = `tile type-${data.type}`;
-            if (selectedTiles.includes(index)) div.classList.add('selected');
+            const selectIndex = selectedTiles.indexOf(index);
+            div.className = `tile ${data.type}`;
+            if (selectIndex !== -1) {
+                div.classList.add('selected');
+                div.setAttribute('data-order', selectIndex + 1);
+            }
             div.innerText = data.text;
-            div.onclick = () => handleTileClick(index);
+            div.onclick = () => handleClick(index);
             grid.appendChild(div);
+        });
+
+        // 更新下方語句槽
+        ["T", "P", "L", "E"].forEach(type => {
+            const slot = document.getElementById(`slot-${type}`);
+            const foundIdx = selectedTiles.find(idx => gridData[idx].type === type);
+            if (foundIdx !== undefined) {
+                slot.innerText = gridData[foundIdx].text;
+                slot.className = `sentence-slot filled`;
+                slot.style.background = `var(--${type.toLowerCase()}-color)`;
+            } else {
+                slot.innerText = getTypeName(type);
+                slot.className = `sentence-slot`;
+                slot.style.background = 'transparent';
+            }
         });
     }
 
-    // 3. 點擊處理
-    function handleTileClick(index) {
-        const clickedTile = gridData[index];
-        
-        // 檢查是否重複點擊或已選滿
-        if (selectedTiles.includes(index)) return;
+    function handleClick(index) {
+        const clickedWord = gridData[index];
+        const isAlreadySelected = selectedTiles.includes(index);
 
-        // 核心邏輯：必須按順序 T -> P -> L -> E (或者只要不重複類型即可)
-        const currentTypes = selectedTiles.map(idx => gridData[idx].type);
-        if (currentTypes.includes(clickedTile.type)) {
-            statusText.innerText = "⚠️ 提示：一個句子只需要一個" + getTypeName(clickedTile.type);
-            return;
-        }
-
-        selectedTiles.push(index);
-        updateSentenceBar();
-
-        // 當選滿 4 個
-        if (selectedTiles.length === 4) {
-            processElimination();
+        if (isAlreadySelected) {
+            // 取消選擇
+            selectedTiles = selectedTiles.filter(i => i !== index);
+            msgBox.innerText = "";
         } else {
-            renderGrid();
+            // 檢查類型是否重複
+            const hasType = selectedTiles.some(i => gridData[i].type === clickedWord.type);
+            if (hasType) {
+                msgBox.innerText = `⚠️ 你已經選過「${getTypeName(clickedWord.type)}」了喔！`;
+                return;
+            }
+            if (selectedTiles.length >= 4) return;
+            
+            selectedTiles.push(index);
+            msgBox.innerText = "";
         }
+
+        if (selectedTiles.length === 4) {
+            msgBox.innerText = "🎉 句子完整！消除中...";
+            setTimeout(eliminate, 800);
+        }
+        render();
     }
 
-    // 4. 消除與重力掉落
-    function processElimination() {
-        statusText.innerText = "✨ 語意達成！能量傳輸中...";
-        
-        // 延遲一點點讓玩家看到選中的樣子
-        setTimeout(() => {
-            // 消除選中的詞，用隨機新詞替換 (模擬掉落)
-            selectedTiles.forEach(idx => {
-                gridData[idx] = { ...wordBank[Math.floor(Math.random() * wordBank.length)], id: Math.random() };
-            });
-
-            selectedTiles = [];
-            sentenceBar.innerText = "完美消除！繼續挑戰...";
-            renderGrid();
-        }, 600);
-    }
-
-    function updateSentenceBar() {
-        const words = selectedTiles.map(idx => gridData[idx].text);
-        sentenceBar.innerText = words.join(" → ");
-        renderGrid();
+    function eliminate() {
+        selectedTiles.forEach(idx => {
+            gridData[idx] = wordBank[Math.floor(Math.random() * wordBank.length)];
+        });
+        selectedTiles = [];
+        msgBox.innerText = "✨ 幹得好！得到 1 份寵物飼料！";
+        render();
     }
 
     function getTypeName(type) {
