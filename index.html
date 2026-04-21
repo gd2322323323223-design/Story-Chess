@@ -2,47 +2,49 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <title>四素連萌：AI 語音寫作版</title>
+    <title>四素連萌：生活小偵探</title>
     <style>
         :root { --t-color: #f1c40f; --p-color: #e91e63; --l-color: #2ecc71; --e-color: #3498db; }
         body { margin: 0; background: #0f172a; color: white; font-family: 'Microsoft JhengHei', sans-serif; display: flex; height: 100vh; overflow: hidden; }
         
         #game-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
         
-        /* 圖片任務區 */
+        /* 圖片任務區 - 針對真實照片優化 */
         #task-display {
-            width: 350px; height: 180px; background: #1e293b; border: 4px solid #38bdf8;
-            border-radius: 20px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; position: relative;
+            width: 400px; height: 260px; background: #1e293b; border: 6px solid #38bdf8;
+            border-radius: 20px; margin-bottom: 20px; position: relative; overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
-        #task-text { font-size: 1.8rem; text-align: center; color: #fff; font-weight: bold; }
+        #task-img { width: 100%; height: 100%; object-fit: cover; }
+        #task-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; text-align: center; padding: 20px; box-sizing: border-box; }
 
         .guide-container { display: flex; gap: 15px; margin-bottom: 15px; }
-        .guide-item { opacity: 0.3; font-size: 1.2rem; font-weight: bold; }
-        .guide-item.active { opacity: 1; transform: scale(1.1); transition: 0.3s; }
+        .guide-item { opacity: 0.3; font-size: 1.2rem; font-weight: bold; background: rgba(255,255,255,0.05); padding: 8px 15px; border-radius: 10px; }
+        .guide-item.active { opacity: 1; transform: scale(1.1); background: rgba(56, 189, 248, 0.2); transition: 0.3s; }
 
         #game-grid { display: grid; grid-template-columns: repeat(4, 120px); gap: 12px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 20px; }
-        .tile { background: #1e293b; border: 2px solid #334155; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; height: 110px; width: 110px; text-align: center; }
+        .tile { background: #1e293b; border: 2px solid #334155; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; height: 110px; width: 110px; text-align: center; font-size: 1.8rem; transition: 0.2s; }
+        .tile:hover { border-color: #38bdf8; transform: translateY(-2px); }
         .tile.selected.T { background: var(--t-color); color: #000; }
         .tile.selected.P { background: var(--p-color); color: #000; }
         .tile.selected.L { background: var(--l-color); color: #000; }
         .tile.selected.E { background: var(--e-color); color: #000; }
         
-        #sentence-bar { margin-top: 20px; font-size: 1.8rem; font-weight: bold; color: #38bdf8; }
+        #sentence-bar { margin-top: 20px; font-size: 1.8rem; font-weight: bold; color: #38bdf8; min-height: 2.5rem; }
 
-        /* ✅ AI 擴寫建議樣式 */
         #ai-suggestion {
-            margin-top: 15px; background: rgba(56, 189, 248, 0.1); border: 1px dashed #38bdf8;
+            margin-top: 15px; background: rgba(46, 204, 113, 0.1); border: 2px dashed #2ecc71;
             padding: 15px 25px; border-radius: 15px; max-width: 600px; display: none;
             animation: slideUp 0.5s ease-out;
         }
-        .ai-title { color: #38bdf8; font-size: 0.9rem; font-weight: bold; margin-bottom: 5px; display: flex; align-items: center; }
-        .ai-content { font-size: 1.2rem; color: #e2e8f0; line-height: 1.4; }
+        .ai-title { color: #2ecc71; font-size: 1rem; font-weight: bold; margin-bottom: 5px; }
+        .ai-content { font-size: 1.3rem; color: #e2e8f0; line-height: 1.5; }
 
-        #retry-btn { margin-top: 15px; padding: 10px 30px; font-size: 1.2rem; background: #ff4757; color: white; border: none; border-radius: 50px; cursor: pointer; display: none; }
+        #retry-btn { margin-top: 15px; padding: 12px 35px; font-size: 1.2rem; background: #ff4757; color: white; border: none; border-radius: 50px; cursor: pointer; display: none; font-weight: bold; }
 
-        #history-sidebar { width: 420px; background: #0b1120; border-left: 2px solid #1e293b; padding: 25px; display: flex; flex-direction: column; }
-        #history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-        .history-item { background: #1e293b; padding: 15px; border-radius: 12px; border-left: 6px solid #2ecc71; }
+        #history-sidebar { width: 380px; background: #0b1120; border-left: 2px solid #1e293b; padding: 25px; display: flex; flex-direction: column; }
+        #history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-top: 15px; }
+        .history-item { background: #1e293b; padding: 15px; border-radius: 12px; border-left: 6px solid #2ecc71; font-size: 1.1rem; }
 
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -51,8 +53,9 @@
 
 <div id="game-area">
     <div id="task-display">
-        <div id="task-text">載入中...</div>
-        <div style="position:absolute; top:-10px; left:10px; background:#38bdf8; color:#000; padding:2px 10px; border-radius:5px; font-size:0.8rem;">今日任務圖片</div>
+        <img id="task-img" src="" style="display:none;">
+        <div id="task-placeholder">請觀察生活場景...</div>
+        <div style="position:absolute; top:10px; left:10px; background:#38bdf8; color:#000; padding:2px 10px; border-radius:5px; font-size:0.8rem; font-weight:bold;">生活小偵探任務</div>
     </div>
 
     <div class="guide-container">
@@ -65,50 +68,62 @@
     <div id="game-grid"></div>
     
     <div id="feedback-area">
-        <div id="sentence-bar">請找出對應的詞語</div>
+        <div id="sentence-bar">請觀察圖片，找出正確的詞語</div>
         
         <div id="ai-suggestion">
-            <div class="ai-title">🤖 AI 老師的擴寫建議：</div>
+            <div class="ai-title">🤖 AI 老師的寫作建議：</div>
             <div id="ai-content" class="ai-content"></div>
         </div>
 
-        <button id="retry-btn" onclick="resetSelection()">再試一次</button>
+        <button id="retry-btn" onclick="resetSelection()">看錯了，再試一次</button>
     </div>
 </div>
 
 <div id="history-sidebar">
-    <h3 style="color:#38bdf8">📜 寫作日誌</h3>
+    <h3 style="color:#38bdf8; margin:0;">📜 寫作小足跡</h3>
     <div id="history-list"></div>
 </div>
 
 <script>
-    // 任務庫：增加擴寫內容 (expansion)
+    // ✅ 現實生活劇本庫
     const tasks = [
         { 
-            imgText: "🍳 媽媽在廚房煮麵", 
-            ans: ["中午", "媽媽", "在廚房", "煮麵"],
-            expansion: "中午時分，辛苦的媽媽在充滿香氣的廚房裡，為全家人煮了一碗熱騰騰的麵。"
+            imgUrl: "path/to/jogging.jpg", // 這裡放入 Canva 生成的圖片路徑
+            imgDesc: "🌅 爸爸在公園跑步",
+            ans: ["清晨", "爸爸", "在公園", "跑步"],
+            expansion: "清晨，太陽公公出來了，辛苦的爸爸在綠油油的公園裡努力地跑步。"
         },
         { 
-            imgText: "📖 老師在圖書館看書", 
-            ans: ["放假", "老師", "在圖書館", "看書"],
-            expansion: "放假的時候，安靜的圖書館裡，老師正全神貫注地閱讀一本有趣的圖畫書。"
+            imgUrl: "path/to/lunch.jpg",
+            imgDesc: "🍱 姐姐在餐廳吃飯",
+            ans: ["中午", "姐姐", "在餐廳", "吃飯"],
+            expansion: "中午時分，肚子餓了的姐姐在乾淨的餐廳裡，開心地吃著午飯。"
         },
         { 
-            imgText: "🏃 小狗在公園跑步", 
-            ans: ["清晨", "小狗", "在公園", "跑步"],
-            expansion: "在空氣清新的清晨，活潑的小狗在綠油油的公園草地上快步跑來跑去。"
+            imgUrl: "path/to/playground.jpg",
+            imgDesc: "🏫 同學們在操場玩耍",
+            ans: ["下午", "同學們", "在操場", "玩耍"],
+            expansion: "下午時分，活潑的同學們在廣闊的操場上，興高采烈地玩耍。"
         },
         { 
-            imgText: "😴 弟弟在臥室睡覺", 
-            ans: ["深夜", "弟弟", "在臥室", "睡覺"],
-            expansion: "寂靜的深夜裡，可愛的弟弟在溫暖的臥室中，正蓋著被子甜甜地睡覺。"
+            imgUrl: "path/to/shopping.jpg",
+            imgDesc: "🛒 媽媽在超市買菜",
+            ans: ["放假", "媽媽", "在超市", "買菜"],
+            expansion: "放假的時候，勤勞的媽媽在熱鬧的超市裡，選購新鮮的蔬菜。"
+        },
+        { 
+            imgUrl: "path/to/drawing.jpg",
+            imgDesc: "🎨 弟弟在客廳畫畫",
+            ans: ["晚上", "弟弟", "在客廳", "畫畫"],
+            expansion: "寂靜的晚上，可愛的弟弟在溫暖的客廳裡，認真地畫著美麗的圖畫。"
         }
     ];
 
     const wordBank = {
-        T: ["清晨", "中午", "放假", "深夜"], P: ["小狗", "媽媽", "老師", "弟弟"],
-        L: ["在廚房", "在圖書館", "在公園", "在臥室"], E: ["跑步", "煮麵", "看書", "睡覺"]
+        T: ["清晨", "中午", "下午", "晚上", "放假"],
+        P: ["爸爸", "姐姐", "同學們", "媽媽", "弟弟"],
+        L: ["在公園", "在餐廳", "在操場", "在超市", "在客廳"],
+        E: ["跑步", "吃飯", "玩耍", "買菜", "畫畫"]
     };
 
     let currentTask = null;
@@ -117,14 +132,37 @@
 
     function initGame() {
         currentTask = tasks[Math.floor(Math.random() * tasks.length)];
-        document.getElementById('task-text').innerText = currentTask.imgText;
+        
+        // 處理圖片顯示
+        const imgEl = document.getElementById('task-img');
+        const placeholder = document.getElementById('task-placeholder');
+        if(currentTask.imgUrl.includes("path/to")) {
+            imgEl.style.display = "none";
+            placeholder.style.display = "flex";
+            placeholder.innerText = currentTask.imgDesc;
+        } else {
+            imgEl.src = currentTask.imgUrl;
+            imgEl.style.display = "block";
+            placeholder.style.display = "none";
+        }
+
         document.getElementById('ai-suggestion').style.display = "none";
+        document.getElementById('retry-btn').style.display = "none";
+        
         gridData = [];
+        // 加入正確答案
         currentTask.ans.forEach((word, i) => gridData.push({ text: word, type: types[i] }));
+        // 填充至 16 格
         while(gridData.length < 16) {
             const t = types[gridData.length % 4];
-            gridData.push({ text: wordBank[t][Math.floor(Math.random()*4)], type: t });
+            const randomWord = wordBank[t][Math.floor(Math.random() * wordBank[t].length)];
+            if(!gridData.some(d => d.text === randomWord)) {
+                gridData.push({ text: randomWord, type: t });
+            } else {
+                gridData.push({ text: wordBank[t][0], type: t }); // 保底
+            }
         }
+        
         shuffle(gridData);
         render();
         updateGuide();
@@ -152,7 +190,6 @@
         if (selectedIndices.length === 4) checkAnswer();
     }
 
-    // ✅ 語音朗讀與擴寫邏輯
     function checkAnswer() {
         const userAns = selectedIndices.map(i => gridData[i].text);
         const sentence = `${userAns[0]}，${userAns[1]}${userAns[2]}${userAns[3]}。`;
@@ -160,42 +197,38 @@
         const bar = document.getElementById('sentence-bar');
 
         if (isCorrect) {
-            bar.innerText = "✨ " + sentence;
+            bar.innerText = "✅ " + sentence;
             bar.style.color = "#2ecc71";
-            
-            // 1. AI 語音朗讀
             speak(sentence);
 
-            // 2. 顯示 AI 擴寫建議
             setTimeout(() => {
-                const sugg = document.getElementById('ai-suggestion');
                 document.getElementById('ai-content').innerText = currentTask.expansion;
-                sugg.style.display = "block";
-                speak("AI老師建議可以這樣寫：" + currentTask.expansion); // 同步朗讀建議
+                document.getElementById('ai-suggestion').style.display = "block";
+                speak("擴寫建議：" + currentTask.expansion);
             }, 800);
 
             sentenceCount++;
             addToHistory(sentence);
-            setTimeout(initGame, 8000); // 給予充足時間閱讀
+            setTimeout(initGame, 10000); // 留 10 秒看擴寫建議
         } else {
-            bar.innerText = "❌ 與圖片不符喔，再觀察看看！";
+            bar.innerText = "❌ 描述不太準確，再看一次圖？";
             bar.style.color = "#ff4757";
             document.getElementById('retry-btn').style.display = "block";
         }
     }
 
-    // AI 語音函數
     function speak(text) {
-        window.speechSynthesis.cancel(); // 停止之前的朗讀
+        window.speechSynthesis.cancel();
         const msg = new SpeechSynthesisUtterance(text);
-        msg.lang = 'zh-HK'; // 可改為 'zh-CN'
-        msg.rate = 0.9;    // 語速稍微慢一點，方便一年級聽
+        msg.lang = 'zh-HK';
+        msg.rate = 0.85;
         window.speechSynthesis.speak(msg);
     }
 
     function resetSelection() {
         selectedIndices = [];
         document.getElementById('retry-btn').style.display = "none";
+        document.getElementById('sentence-bar').innerText = "請重新觀察並選擇";
         render(); updateGuide();
     }
 
@@ -209,8 +242,7 @@
         item.className = "history-item";
         item.innerText = `${sentenceCount}. ${s}`;
         const list = document.getElementById('history-list');
-        list.appendChild(item);
-        list.scrollTop = list.scrollHeight;
+        list.prepend(item);
     }
 
     initGame();
