@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>22 位學生神獸總覽儀表板</title>
+  <link rel="stylesheet" href="style.css" />
+  <script
+    type="module"
+    src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"
+  ></script>
+</head>
+<body>
+  <button
+    type="button"
+    id="btn-teacher-mode"
+    class="teacher-mode-btn"
+    title="教師模式"
+    aria-label="教師模式"
+  >
+    ⚙
+  </button>
+
+  <header class="dash-header">
+    <h1 class="dash-header__title">🎓 22 位學生神獸總覽儀表板</h1>
+    <p class="dash-header__desc">
+      點擊插槽輸入姓名 → 輸入「<strong>孵化</strong>」破蛋 → 點擊已孵化神獸進入個人養成頁
+    </p>
+  </header>
+
+  <main id="dashboard-grid" class="dashboard-grid" aria-label="全班神獸插槽"></main>
+
+  <script src="script.js"></script>
+</body>
+</html>

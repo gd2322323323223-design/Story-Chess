@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>神獸養成 · 個人頁</title>
+  <link rel="stylesheet" href="pet.css" />
+  <script
+    type="module"
+    src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"
+  ></script>
+</head>
+<body>
+  <a href="index.html" class="back-dashboard">← 返回全班總覽</a>
+
+  <div
+    id="teacher-trigger"
+    class="teacher-trigger"
+    aria-hidden="true"
+    title=""
+  ></div>
+
+  <main class="app">
+    <section class="stage" aria-label="神獸舞台">
+      <div class="stage__inner">
+        <div id="stage-wrap" class="stage__viewer-wrap">
+          <span id="stage-badge" class="stage__badge">載入中…</span>
+          <model-viewer
+            id="beast-viewer"
+            src=""
+            alt="神獸 3D 模型"
+            autoplay
+            auto-rotate
+            camera-controls
+            animation-name="idle"
+            shadow-intensity="1"
+            exposure="1"
+            environment-image="neutral"
+          ></model-viewer>
+        </div>
+        <p id="stage-status" class="stage__status" aria-live="polite"></p>
+        <p class="stage__hint">拖曳旋轉 · 滾輪縮放</p>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="控制面板">
+      <header class="panel__header">
+        <h1 id="pet-student-title" class="panel__title">神獸養成</h1>
+        <p id="panel-subtitle" class="panel__subtitle">蛋 → 孵化 → 學習成長</p>
+      </header>
+
+      <div class="panel__stats">
+        <div class="stat-row stat-row--lang">
+          <label for="bar-lang">⭐ 語文能量</label>
+          <div class="stat-bar">
+            <div id="bar-lang" class="stat-bar__fill stat-bar__fill--lang" style="width: 0%"></div>
+          </div>
+          <span id="energy-score" class="stat-value">0</span>
+        </div>
+
+        <div class="stat-row">
+          <label for="bar-hunger">🍽 飽食度</label>
+          <div class="stat-bar">
+            <div id="bar-hunger" class="stat-bar__fill" style="width: 100%"></div>
+          </div>
+          <span id="hunger-value" class="stat-value">100</span>
+        </div>
+
+        <div class="stat-row">
+          <label for="bar-energy">⚡ 精力值</label>
+          <div class="stat-bar">
+            <div id="bar-energy" class="stat-bar__fill stat-bar__fill--energy" style="width: 100%"></div>
+          </div>
+          <span id="energy-value" class="stat-value">100</span>
+        </div>
+
+        <div class="stat-row">
+          <label for="bar-knowledge">📚 知識值</label>
+          <div class="stat-bar">
+            <div id="bar-knowledge" class="stat-bar__fill stat-bar__fill--knowledge" style="width: 0%"></div>
+          </div>
+          <span id="knowledge-value" class="stat-value">0</span>
+        </div>
+      </div>
+
+      <div class="panel__actions">
+        <button type="button" id="btn-study" class="btn btn--study">
+          📚 讀書學習（答對 +10 能量）
+        </button>
+        <button type="button" id="btn-feed" class="btn btn--primary" disabled>
+          🍖 餵食（語文 -20 · 飽食 +30）
+        </button>
+        <button type="button" id="btn-train" class="btn btn--secondary" disabled>
+          🎪 訓練（精力 -20 · 知識 +25）
+        </button>
+        <button type="button" id="btn-sleep" class="btn btn--sleep" disabled>
+          💤 睡覺（精力回滿）
+        </button>
+        <button type="button" id="btn-teacher" class="btn btn--outline">
+          老師說明
+        </button>
+      </div>
+    </aside>
+  </main>
+
+  <div
+    id="evo-overlay"
+    class="evo-overlay"
+    style="display: none"
+    role="presentation"
+  >
+    <div
+      class="evo-card"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="evo-title"
+    >
+      <div class="evo-sparkles" aria-hidden="true"></div>
+      <h2 id="evo-title" class="evo-title">恭喜進化！</h2>
+      <p class="evo-text">
+        你的語文能量或知識值達成階段里程碑！神獸進化為「學霸神獸」，獲得永久黃金光輝！
+      </p>
+      <button type="button" id="btn-evo-close" class="btn btn--primary">
+        好耶！
+      </button>
+    </div>
+  </div>
+
+  <div id="hatch-overlay" class="hatch-overlay" style="display: none">
+    <div class="hatch-card">
+      <p class="hatch-card__emoji">🥚✨</p>
+      <h2>破殼孵化！</h2>
+      <p>語文能量已足夠，神獸誕生了！</p>
+    </div>
+  </div>
+
+  <div id="quiz-overlay" class="quiz-overlay" style="display: none">
+    <div class="quiz-card" role="dialog" aria-modal="true" aria-labelledby="quiz-title">
+      <p class="quiz-card__tag">📚 語文小測驗</p>
+      <h2 id="quiz-title" class="quiz-card__question"></h2>
+      <div id="quiz-options" class="quiz-card__options"></div>
+      <button type="button" id="btn-quiz-close" class="btn btn--outline quiz-card__close">
+        稍後再答
+      </button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="pet.js"></script>
+</body>
+</html>
