@@ -60,20 +60,20 @@
   ];
 
   const QUICK_ADD_VALUES = [1, 2, 3, 4, 5];
-  // 高對比預設色盤：紅/藍/綠/金/銀/白/紫/橘等
+  // 低飽和、柔和深色漸層（莫蘭迪系），襯托 3D 模型細節
   const SLOT_GRADIENTS = [
-    "linear-gradient(135deg, #ff2a2a, #7f0000)", // vivid red
-    "linear-gradient(135deg, #1e40ff, #001a88)", // sapphire blue
-    "linear-gradient(135deg, #00c853, #006b2d)", // emerald green
-    "linear-gradient(135deg, #ffd700, #8a6b00)", // gold
-    "linear-gradient(135deg, #d9dde2, #7f8891)", // silver
-    "linear-gradient(135deg, rgba(255,255,255,0.92), rgba(198,210,224,0.55))", // bright white
-    "linear-gradient(135deg, #8a2be2, #3e0a70)", // purple
-    "linear-gradient(135deg, #ff8c00, #7a3a00)", // orange
-    "linear-gradient(135deg, #00bcd4, #005e69)", // cyan
-    "linear-gradient(135deg, #ff1493, #7a0b49)", // magenta
-    "linear-gradient(135deg, #39ff14, #1c6f0d)", // neon green
-    "linear-gradient(135deg, #ff4d4d, #4a0f0f)", // rose red
+    "linear-gradient(145deg, #2b3d52 0%, #1a2533 100%)",
+    "linear-gradient(145deg, #2a4a3f 0%, #1b2f28 100%)",
+    "linear-gradient(145deg, #3a3f47 0%, #242a31 100%)",
+    "linear-gradient(145deg, #4a4538 0%, #2e2b24 100%)",
+    "linear-gradient(145deg, #3d3550 0%, #252033 100%)",
+    "linear-gradient(145deg, #334055 0%, #212836 100%)",
+    "linear-gradient(145deg, #2f4a4f 0%, #1d3135 100%)",
+    "linear-gradient(145deg, #3f3a4a 0%, #272330 100%)",
+    "linear-gradient(145deg, #35423f 0%, #222c29 100%)",
+    "linear-gradient(145deg, #4a4238 0%, #2d2822 100%)",
+    "linear-gradient(145deg, #3e3a32 0%, #26231e 100%)",
+    "linear-gradient(145deg, #4a3a35 0%, #2c211e 100%)",
   ];
 
   const gridEl = document.getElementById("dashboard-grid");
@@ -246,13 +246,32 @@
       el.setAttribute("tabindex", "0");
       el.innerHTML =
         '<span class="slot__num"></span>' +
+        '<div class="slot__teacher-tools">' +
+        '  <button type="button" class="slot__teacher-btn slot__teacher-btn--hatch" title="強制孵化" aria-label="強制孵化">⚡</button>' +
+        '  <button type="button" class="slot__teacher-btn slot__teacher-btn--egg" title="變回蛋" aria-label="變回蛋">🥚</button>' +
+        "</div>" +
         '<div class="slot__stage"></div>' +
         '<div class="slot__footer">' +
         '  <button type="button" class="slot__footer-part slot__footer-part--emoji" aria-label="狀態表情"></button>' +
         '  <div class="slot__footer-part slot__footer-part--name"></div>' +
         '  <button type="button" class="slot__footer-part slot__footer-part--score" aria-label="得分"></button>' +
         "</div>" +
-        '<div class="score-quick-menu" hidden></div>';
+        '<div class="score-quick-menu"></div>';
+
+      const btnForceHatch = el.querySelector(".slot__teacher-btn--hatch");
+      const btnForceEgg = el.querySelector(".slot__teacher-btn--egg");
+      if (btnForceHatch) {
+        btnForceHatch.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          forceHatchSlot(slot.id);
+        });
+      }
+      if (btnForceEgg) {
+        btnForceEgg.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          forceEggSlot(slot.id);
+        });
+      }
 
       el.addEventListener("click", function () {
         onSlotClick(slot.id);
@@ -310,8 +329,8 @@
         quickMenu.appendChild(btn);
       });
       const isOpen = activeScoreMenuSlotId === slot.id && !teacherMode;
-      quickMenu.hidden = !isOpen;
       quickMenu.classList.toggle("is-open", isOpen);
+      quickMenu.setAttribute("aria-hidden", isOpen ? "false" : "true");
     }
 
     const stage = el.querySelector(".slot__stage");
@@ -357,6 +376,33 @@
     renderSlotElement(slot);
   }
 
+  function forceHatchSlot(slotId) {
+    if (!teacherMode && !ensureTeacherModeOn()) return;
+    const slot = getSlotById(slotId);
+    if (!slot) return;
+    slot.hatched = true;
+    saveSlots();
+    renderSlotElement(slot);
+  }
+
+  function forceEggSlot(slotId) {
+    if (!teacherMode && !ensureTeacherModeOn()) return;
+    const slot = getSlotById(slotId);
+    if (!slot) return;
+    slot.hatched = false;
+    saveSlots();
+    renderSlotElement(slot);
+  }
+
+  function refreshTeacherModeUI() {
+    document.body.classList.toggle("teacher-mode-active", teacherMode);
+    if (btnTeacherMode) {
+      btnTeacherMode.classList.toggle("is-active", teacherMode);
+      btnTeacherMode.title = teacherMode ? "教師模式（已開啟）" : "教師模式";
+    }
+    renderAll();
+  }
+
   function ensureTeacherModeOn() {
     if (teacherMode) return true;
     const pwd = prompt("請輸入教師密碼：");
@@ -366,12 +412,10 @@
       return false;
     }
     teacherMode = true;
-    document.body.classList.add("teacher-mode-active");
-    if (btnTeacherMode) {
-      btnTeacherMode.classList.add("is-active");
-      btnTeacherMode.title = "教師模式（已開啟）";
-    }
-    alert("教師模式已開啟：點擊插槽底部可以管理表情與分數。");
+    refreshTeacherModeUI();
+    alert(
+      "教師模式已開啟：可使用 ⚡ 強制孵化、🥚 變回蛋，以及表情／分數管理。"
+    );
     return true;
   }
 
@@ -381,12 +425,8 @@
       return;
     }
     teacherMode = false;
-    document.body.classList.remove("teacher-mode-active");
-    if (btnTeacherMode) {
-      btnTeacherMode.classList.remove("is-active");
-      btnTeacherMode.title = "教師模式";
-    }
     closeQuickScoreMenu();
+    refreshTeacherModeUI();
     alert("教師模式已關閉。");
   }
 
@@ -418,6 +458,7 @@
     if (!slot) return;
 
     if (teacherMode) {
+      closeQuickScoreMenu();
       const input = prompt(
         "請輸入新的分數（0～" + SCORE_MAX + "）：",
         String(slot.score)

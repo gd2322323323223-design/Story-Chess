@@ -140,12 +140,67 @@ body.teacher-mode-active .slot {
 }
 
 .slot__stage {
+  position: relative;
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1.75rem 0.5rem 0.5rem;
   min-height: 120px;
+}
+
+.slot__stage::before {
+  content: "";
+  position: absolute;
+  inset: 8% 12%;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 255, 255, 0.06) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.slot__teacher-tools {
+  display: none;
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 5;
+  gap: 0.25rem;
+}
+
+body.teacher-mode-active .slot__teacher-tools {
+  display: flex;
+}
+
+.slot__teacher-btn {
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(12, 18, 30, 0.65);
+  color: var(--text);
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.slot__teacher-btn:hover {
+  transform: scale(1.06);
+  border-color: rgba(94, 234, 212, 0.55);
+}
+
+.slot__teacher-btn--hatch {
+  color: #fde68a;
+}
+
+.slot__teacher-btn--egg {
+  font-size: 0.65rem;
 }
 
 /* 彩色蛋 */
@@ -262,18 +317,47 @@ body.teacher-mode-active .slot {
 }
 
 .score-quick-menu {
+  display: none;
   position: absolute;
-  right: 0.45rem;
-  bottom: 3.1rem;
-  z-index: 4;
-  display: flex;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 3.35rem;
+  z-index: 6;
   gap: 0.3rem;
-  padding: 0.3rem;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(12, 18, 30, 0.72);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+  padding: 0.35rem 0.4rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(12, 18, 30, 0.88);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.score-quick-menu.is-open {
+  display: flex;
+  pointer-events: auto;
+  animation: scoreBubbleIn 0.18s ease-out;
+}
+
+.score-quick-menu.is-open::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: rgba(12, 18, 30, 0.88);
+}
+
+@keyframes scoreBubbleIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .score-quick-btn {
@@ -333,10 +417,9 @@ body.teacher-mode-active .slot {
   }
 
   .score-quick-menu {
-    right: 0.3rem;
-    bottom: 2.65rem;
+    bottom: 2.85rem;
     gap: 0.2rem;
-    padding: 0.2rem;
+    padding: 0.25rem 0.3rem;
   }
 
   .score-quick-btn {
