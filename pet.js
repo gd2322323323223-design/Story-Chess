@@ -480,7 +480,6 @@
 
   function wakeUp() {
     isAsleep = false;
-    if (viewer) viewer.setAttribute("auto-rotate", "");
     syncNeedAnimation();
     renderUI();
   }
@@ -491,7 +490,6 @@
     isAnimLocked = false;
     energy = STAT_MAX;
     if (viewer) {
-      viewer.removeAttribute("auto-rotate");
       setViewerAnimation(ANIM.idle);
     }
     renderUI();

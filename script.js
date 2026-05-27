@@ -1383,15 +1383,6 @@
       stage.appendChild(egg);
     }
 
-    // 景緻特效：陽光、微風、雨滴（純 CSS）
-    const weather = document.createElement("div");
-    weather.className = "slot__weather";
-    weather.innerHTML =
-      '<div class="slot__weather-sun"></div>' +
-      '<div class="slot__weather-wind"></div>' +
-      '<div class="slot__weather-rain"></div>';
-    stage.appendChild(weather);
-
     applySlotDrawClasses(el, slot.id);
   }
 
