@@ -367,7 +367,7 @@
     const slot = getSlotById(slotId);
     if (!slot) return;
 
-    if (teacherMode || (ensureTeacherModeOn() && teacherMode)) {
+    if (teacherMode) {
       const input = prompt(
         "請輸入新的分數（0～" + SCORE_MAX + "）：",
         String(slot.score)
