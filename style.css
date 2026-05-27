@@ -650,13 +650,13 @@ body.teacher-mode-active .slot {
   margin: 0;
   font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
   font-size: clamp(1.85rem, 5vw, 2.75rem);
-  font-weight: 900;
-  letter-spacing: 3px;
+  font-weight: 800;
+  letter-spacing: 4px;
   line-height: 1.2;
   white-space: nowrap;
 }
 
-/* 底層：厚描邊 + 3D 下沉（不與漸層 clip 混用，避免條紋崩潰） */
+/* 底層：香檳金 + 深咖啡 3D 浮雕（與漸層分層，避免渲染撕裂） */
 .dash-header__title-outline,
 .dash-header__title-gradient {
   display: block;
@@ -670,35 +670,30 @@ body.teacher-mode-active .slot {
   left: 0;
   top: 0;
   z-index: 0;
-  color: #3d1a5a;
-  transform: translateY(4px);
+  color: #aa7c11;
   text-shadow:
-    -2px -2px 0 #3d1a5a,
-    2px -2px 0 #3d1a5a,
-    -2px 2px 0 #3d1a5a,
-    2px 2px 0 #3d1a5a,
-    0 4px 0 #240e3b,
-    3px 7px 8px rgba(36, 14, 59, 0.35);
+    -1px -1px 0 #d4af37,
+    1px -1px 0 #d4af37,
+    -1px 1px 0 #d4af37,
+    1px 1px 0 #d4af37,
+    0 2px 0 #aa7c11,
+    0 4px 0 #8b6508,
+    0 6px 0 #3d250a,
+    2px 8px 10px rgba(61, 37, 10, 0.4);
   pointer-events: none;
   user-select: none;
 }
 
-/* 上層：粉紫糖果漸層字 */
+/* 上層：亮白金高光漸層 */
 .dash-header__title-gradient {
   position: relative;
   z-index: 1;
-  background: linear-gradient(
-    to bottom,
-    #ffffff 0%,
-    #ff66b2 48%,
-    #9933ff 100%
-  );
-  background-size: 100% 220%;
+  background: linear-gradient(to bottom, #ffffff 0%, #f5f7fa 100%);
+  background-size: 100% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.85));
-  animation: headerTitleShine 5s ease-in-out infinite;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.95));
 }
 
 @keyframes headerBadgeFloat {
@@ -720,16 +715,6 @@ body.teacher-mode-active .slot {
   50% {
     transform: scale(1.15) rotate(12deg);
     opacity: 1;
-  }
-}
-
-@keyframes headerTitleShine {
-  0%,
-  100% {
-    background-position: 0% 0%;
-  }
-  50% {
-    background-position: 0% 100%;
   }
 }
 
@@ -1054,7 +1039,7 @@ body.teacher-mode-active .slot__teacher-tools {
 
   .dash-header__title {
     font-size: clamp(1.45rem, 6.5vw, 1.85rem);
-    letter-spacing: 2px;
+    letter-spacing: 3px;
     white-space: normal;
     text-align: center;
   }
