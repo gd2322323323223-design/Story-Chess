@@ -325,6 +325,22 @@
       sort: "duration_asc",
       volume: 0.52,
     },
+    // Freesound: Cute1.mp3 (約 2.27 秒，可用於加分音效)
+    scoreCute: {
+      query: "Cute1.mp3",
+      filter: "duration:[0 TO 3]",
+      fallbackFilters: ["Cute1"],
+      sort: "duration_asc",
+      volume: 0.85,
+    },
+    // Freesound: [Synth seq] \"cute\" sine tone pluck sequence - E5->C4
+    timerCute: {
+      query: "\"cute\" sine tone pluck sequence E5 C4",
+      filter: "duration:[0 TO 5]",
+      fallbackFilters: ["cute sine pluck sequence"],
+      sort: "rating_desc",
+      volume: 0.9,
+    },
   };
 
   const freesoundUrlCache = {};
@@ -476,8 +492,8 @@
     return webAudioCtx;
   }
 
-  /** 加分：單音節極短清脆上揚「叮！」，每次點擊獨立節點可重疊 */
-  function playScoreDing() {
+  /** 加分用的本地合成短促「叮！」（在沒有 Freesound 金鑰時使用） */
+  function playScoreDingFallback() {
     const ctx = getWebAudioContext();
     if (!ctx) return;
 
@@ -498,6 +514,15 @@
     gain.connect(ctx.destination);
     osc.start(t);
     osc.stop(t + dur + 0.02);
+  }
+
+  /** 加分：優先使用 Freesound Cute1.mp3，否則退回本地超短合成音效 */
+  function playScoreDing() {
+    if (FREESOUND_TOKEN) {
+      void playFreesoundEffect("scoreCute");
+      return;
+    }
+    playScoreDingFallback();
   }
 
   /** 孵化：Q 彈雙音節卡通魔法感 */
@@ -616,8 +641,8 @@
     osc2.stop(t2 + 0.18);
   }
 
-  /** 倒計時結束：清脆提示音 */
-  function playTimerAlarm() {
+  /** 倒計時結束：Frequent tone，優先 Freesound timerCute，否則本地提示音 */
+  function playTimerAlarmFallback() {
     const ctx = getWebAudioContext();
     if (!ctx) return;
 
@@ -636,6 +661,14 @@
       osc.start(t + offset);
       osc.stop(t + offset + 0.25);
     });
+  }
+
+  function playTimerAlarm() {
+    if (FREESOUND_TOKEN) {
+      void playFreesoundEffect("timerCute");
+      return;
+    }
+    playTimerAlarmFallback();
   }
 
   async function playFreesoundEffect(effectKey) {
@@ -1300,6 +1333,15 @@
       egg.style.setProperty("--egg-hue", String(eggHueForSlot(slot.id)));
       stage.appendChild(egg);
     }
+
+    // 景緻特效：陽光、微風、雨滴（純 CSS）
+    const weather = document.createElement("div");
+    weather.className = "slot__weather";
+    weather.innerHTML =
+      '<div class="slot__weather-sun"></div>' +
+      '<div class="slot__weather-wind"></div>' +
+      '<div class="slot__weather-rain"></div>';
+    stage.appendChild(weather);
 
     applySlotDrawClasses(el, slot.id);
   }
