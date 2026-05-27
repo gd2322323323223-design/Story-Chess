@@ -645,6 +645,8 @@ body.teacher-mode-active .slot {
 }
 
 .dash-header__title {
+  position: relative;
+  display: inline-block;
   margin: 0;
   font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
   font-size: clamp(1.85rem, 5vw, 2.75rem);
@@ -652,24 +654,51 @@ body.teacher-mode-active .slot {
   letter-spacing: 3px;
   line-height: 1.2;
   white-space: nowrap;
+}
+
+/* 底層：厚描邊 + 3D 下沉（不與漸層 clip 混用，避免條紋崩潰） */
+.dash-header__title-outline,
+.dash-header__title-gradient {
+  display: block;
+  font: inherit;
+  letter-spacing: inherit;
+  white-space: inherit;
+}
+
+.dash-header__title-outline {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  color: #3d1a5a;
+  transform: translateY(4px);
+  text-shadow:
+    -2px -2px 0 #3d1a5a,
+    2px -2px 0 #3d1a5a,
+    -2px 2px 0 #3d1a5a,
+    2px 2px 0 #3d1a5a,
+    0 4px 0 #240e3b,
+    3px 7px 8px rgba(36, 14, 59, 0.35);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 上層：粉紫糖果漸層字 */
+.dash-header__title-gradient {
+  position: relative;
+  z-index: 1;
   background: linear-gradient(
     to bottom,
     #ffffff 0%,
-    #ff66b2 52%,
+    #ff66b2 48%,
     #9933ff 100%
   );
-  background-size: 100% 100%;
+  background-size: 100% 220%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  text-shadow:
-    -3px -3px 0 #3d1a5a,
-    3px -3px 0 #3d1a5a,
-    -3px 3px 0 #3d1a5a,
-    3px 3px 0 #3d1a5a,
-    0 5px 0 #240e3b,
-    4px 8px 10px rgba(0, 0, 0, 0.3);
-  animation: headerTitleShine 5s linear infinite;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.85));
+  animation: headerTitleShine 5s ease-in-out infinite;
 }
 
 @keyframes headerBadgeFloat {
@@ -695,11 +724,12 @@ body.teacher-mode-active .slot {
 }
 
 @keyframes headerTitleShine {
-  0% {
-    background-position: 0% center;
-  }
+  0%,
   100% {
-    background-position: 200% center;
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 0% 100%;
   }
 }
 
@@ -1027,6 +1057,11 @@ body.teacher-mode-active .slot__teacher-tools {
     letter-spacing: 2px;
     white-space: normal;
     text-align: center;
+  }
+
+  .dash-header__title-outline,
+  .dash-header__title-gradient {
+    white-space: inherit;
   }
 
   .dash-header__deco {
