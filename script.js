@@ -3,6 +3,8 @@
 
   const STORAGE_KEY = "classroom-dashboard-v1";
   const EMOJI_DAY_STORAGE_KEY = "classroom-dashboard-emoji-day-v1";
+  const GROUPS_STORAGE_KEY = "classroom-dashboard-groups-v1";
+  const MAX_GROUPS = 10;
   const SLOT_COUNT = 22;
   const DEFAULT_NAME = "待命名";
   const DEFAULT_EMOJI = "😄";
@@ -131,6 +133,9 @@
   let countdownRemainingMs = 0;
   let countdownEndTs = 0;
   let timerAlarmPlayed = false;
+  let groups = [];
+  let scoreToastTimeoutId = null;
+  let groupPanelInitialized = false;
 
   function animalForSlot(id) {
     return ANIMALS[(id - 1) % ANIMALS.length];
@@ -801,6 +806,351 @@
     localStorage.setItem(EMOJI_DAY_STORAGE_KEY, JSON.stringify(pack));
   }
 
+  function loadGroups() {
+    try {
+      const raw = localStorage.getItem(GROUPS_STORAGE_KEY);
+      if (!raw) {
+        groups = [];
+        return;
+      }
+      const data = JSON.parse(raw);
+      if (!Array.isArray(data)) {
+        groups = [];
+        return;
+      }
+      groups = data.slice(0, MAX_GROUPS).map(function (g, idx) {
+        const memberIds = Array.isArray(g.memberIds)
+          ? g.memberIds.filter(function (id) {
+              return Number.isInteger(id) && id >= 1 && id <= SLOT_COUNT;
+            })
+          : [];
+        return {
+          id: typeof g.id === "number" ? g.id : idx + 1,
+          name:
+            typeof g.name === "string" && g.name.trim()
+              ? g.name.trim()
+              : "組別 " + (idx + 1),
+          memberIds: memberIds,
+        };
+      });
+    } catch (e) {
+      groups = [];
+    }
+  }
+
+  function saveGroups() {
+    localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(groups));
+  }
+
+  function nextGroupId() {
+    let max = 0;
+    groups.forEach(function (g) {
+      if (g.id > max) max = g.id;
+    });
+    return max + 1;
+  }
+
+  function getGroupById(groupId) {
+    return groups.find(function (g) {
+      return g.id === groupId;
+    });
+  }
+
+  function formatScoreDelta(delta) {
+    return (delta > 0 ? "+" : "") + delta + "分";
+  }
+
+  function showScoreToast(slot, delta) {
+    if (!delta) return;
+    const toast = document.getElementById("score-toast");
+    const textEl = document.getElementById("score-toast-text");
+    if (!toast || !textEl) return;
+
+    const name =
+      slot.name && slot.name !== DEFAULT_NAME ? slot.name : slot.id + "號學生";
+    textEl.textContent = name + "表現佳！" + formatScoreDelta(delta) + "！";
+
+    if (scoreToastTimeoutId !== null) {
+      clearTimeout(scoreToastTimeoutId);
+      scoreToastTimeoutId = null;
+    }
+
+    toast.hidden = false;
+    const card = toast.querySelector(".score-toast__card");
+    if (card) {
+      card.style.animation = "none";
+      void card.offsetWidth;
+      card.style.animation = "";
+    }
+
+    scoreToastTimeoutId = setTimeout(function () {
+      toast.hidden = true;
+      scoreToastTimeoutId = null;
+    }, 2200);
+  }
+
+  function showGroupScoreToast(group, delta) {
+    if (!delta || !group) return;
+    const toast = document.getElementById("score-toast");
+    const textEl = document.getElementById("score-toast-text");
+    if (!toast || !textEl) return;
+
+    textEl.textContent =
+      "「" + group.name + "」全組表現佳！" + formatScoreDelta(delta) + "！";
+
+    if (scoreToastTimeoutId !== null) {
+      clearTimeout(scoreToastTimeoutId);
+    }
+    toast.hidden = false;
+    const card = toast.querySelector(".score-toast__card");
+    if (card) {
+      card.style.animation = "none";
+      void card.offsetWidth;
+      card.style.animation = "";
+    }
+    scoreToastTimeoutId = setTimeout(function () {
+      toast.hidden = true;
+      scoreToastTimeoutId = null;
+    }, 2200);
+  }
+
+  function ensureGroupPanel() {
+    if (!gridEl || groupPanelInitialized) return;
+
+    const panel = document.createElement("section");
+    panel.id = "group-score-panel";
+    panel.className = "group-score-panel";
+    panel.setAttribute("aria-label", "組別加分");
+    panel.innerHTML =
+      '<div class="group-score-panel__head">' +
+      '<span class="group-score-panel__label">組別加分</span>' +
+      '<button type="button" id="btn-group-manage" class="group-score-panel__manage" title="管理組別">⚙ 管理</button>' +
+      "</div>" +
+      '<div id="group-buttons" class="group-score-panel__buttons"></div>';
+
+    gridEl.appendChild(panel);
+
+    document.getElementById("btn-group-manage").addEventListener("click", function () {
+      if (!teacherMode && !ensureTeacherModeOn()) return;
+      openGroupManageModal();
+    });
+
+    const modal = document.getElementById("group-manage-modal");
+    if (modal) {
+      modal.addEventListener("click", function (ev) {
+        if (ev.target === modal) closeGroupManageModal();
+      });
+    }
+    const btnClose = document.getElementById("btn-group-manage-close");
+    if (btnClose) btnClose.addEventListener("click", closeGroupManageModal);
+    const btnAdd = document.getElementById("btn-group-add");
+    if (btnAdd) btnAdd.addEventListener("click", onAddGroup);
+
+    groupPanelInitialized = true;
+  }
+
+  function renderGroupButtons() {
+    const wrap = document.getElementById("group-buttons");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+
+    if (!groups.length) {
+      const empty = document.createElement("p");
+      empty.className = "group-score-panel__empty";
+      empty.textContent = "尚無組別，請點「管理」新增";
+      wrap.appendChild(empty);
+      return;
+    }
+
+    groups.forEach(function (g) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "group-btn";
+      const count = g.memberIds.length;
+      btn.textContent = g.name + (count ? " (" + count + ")" : "");
+      btn.title = count
+        ? "為「" + g.name + "」" + count + " 位成員加分"
+        : "此組尚無成員";
+      if (!count) btn.classList.add("is-empty");
+      btn.addEventListener("click", function () {
+        onGroupAddScore(g.id);
+      });
+      wrap.appendChild(btn);
+    });
+  }
+
+  function openGroupManageModal() {
+    const modal = document.getElementById("group-manage-modal");
+    if (!modal) return;
+    renderGroupManageList();
+    modal.hidden = false;
+    document.body.classList.add("group-manage-open");
+  }
+
+  function closeGroupManageModal() {
+    const modal = document.getElementById("group-manage-modal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("group-manage-open");
+    renderGroupButtons();
+  }
+
+  function renderGroupManageList() {
+    const list = document.getElementById("group-manage-list");
+    if (!list) return;
+    list.innerHTML = "";
+
+    if (!groups.length) {
+      const li = document.createElement("li");
+      li.className = "group-manage-item";
+      li.textContent = "尚無組別";
+      list.appendChild(li);
+      return;
+    }
+
+    groups.forEach(function (g) {
+      const li = document.createElement("li");
+      li.className = "group-manage-item";
+      li.innerHTML =
+        '<span class="group-manage-item__name">' +
+        g.name +
+        "</span>" +
+        '<span class="group-manage-item__count">' +
+        g.memberIds.length +
+        " 人</span>";
+      const btnRename = document.createElement("button");
+      btnRename.type = "button";
+      btnRename.className = "group-manage-item__btn group-manage-item__btn--rename";
+      btnRename.textContent = "改名";
+      btnRename.addEventListener("click", function () {
+        onRenameGroup(g.id);
+      });
+      const btnDelete = document.createElement("button");
+      btnDelete.type = "button";
+      btnDelete.className = "group-manage-item__btn group-manage-item__btn--delete";
+      btnDelete.textContent = "刪除";
+      btnDelete.addEventListener("click", function () {
+        onDeleteGroup(g.id);
+      });
+      li.appendChild(btnRename);
+      li.appendChild(btnDelete);
+      list.appendChild(li);
+    });
+
+    const btnAdd = document.getElementById("btn-group-add");
+    if (btnAdd) btnAdd.disabled = groups.length >= MAX_GROUPS;
+  }
+
+  function onAddGroup() {
+    if (groups.length >= MAX_GROUPS) {
+      alert("最多只能建立 " + MAX_GROUPS + " 個組別。");
+      return;
+    }
+    const nameInput = prompt("請輸入新組別名稱：", "組別 " + (groups.length + 1));
+    if (nameInput === null) return;
+    const name = nameInput.trim() || "組別 " + (groups.length + 1);
+    groups.push({ id: nextGroupId(), name: name, memberIds: [] });
+    saveGroups();
+    renderGroupManageList();
+    renderGroupButtons();
+  }
+
+  function onRenameGroup(groupId) {
+    const g = getGroupById(groupId);
+    if (!g) return;
+    const input = prompt("請輸入新的組別名稱：", g.name);
+    if (input === null) return;
+    g.name = input.trim() || g.name;
+    saveGroups();
+    renderGroupManageList();
+    renderGroupButtons();
+  }
+
+  function onDeleteGroup(groupId) {
+    const g = getGroupById(groupId);
+    if (!g) return;
+    if (!confirm('確定要刪除組別「' + g.name + '」嗎？')) return;
+    groups = groups.filter(function (x) {
+      return x.id !== groupId;
+    });
+    saveGroups();
+    renderGroupManageList();
+    renderGroupButtons();
+  }
+
+  function assignSlotToGroup(slotId) {
+    if (!groups.length) {
+      alert("尚無組別，請先點「組別加分」旁的「管理」新增組別。");
+      return;
+    }
+
+    const lines = groups.map(function (g, idx) {
+      return idx + 1 + " = " + g.name + "（" + g.memberIds.length + " 人）";
+    });
+    const menu =
+      "請選擇要加入的組別：\n" +
+      lines.join("\n") +
+      "\n\n0 = 不加入任何組別\n" +
+      "（輸入組別編號）";
+    const raw = prompt(menu, "1");
+    if (raw === null) return;
+
+    const n = parseInt(raw, 10);
+    if (Number.isNaN(n) || n < 0 || n > groups.length) {
+      alert("請輸入有效編號。");
+      return;
+    }
+
+    groups.forEach(function (g) {
+      g.memberIds = g.memberIds.filter(function (id) {
+        return id !== slotId;
+      });
+    });
+
+    if (n === 0) {
+      saveGroups();
+      alert(slotId + " 號已移出所有組別。");
+      return;
+    }
+
+    const target = groups[n - 1];
+    if (target.memberIds.indexOf(slotId) < 0) {
+      target.memberIds.push(slotId);
+    }
+    saveGroups();
+    renderGroupButtons();
+    alert(slotId + " 號已加入「" + target.name + "」。");
+  }
+
+  function onGroupAddScore(groupId) {
+    if (!teacherMode && !ensureTeacherModeOn()) return;
+    const group = getGroupById(groupId);
+    if (!group) return;
+    if (!group.memberIds.length) {
+      alert("「" + group.name + "」目前沒有成員，請先在教師模式下指定學生加入組別。");
+      return;
+    }
+
+    const raw = prompt(
+      "要為「" + group.name + "」全組加幾分？（可輸入正負整數，0 取消）",
+      "1"
+    );
+    if (raw === null) return;
+    const delta = parseInt(raw, 10);
+    if (!Number.isFinite(delta) || delta === 0) {
+      if (raw !== "0") alert("請輸入非 0 的整數。");
+      return;
+    }
+
+    group.memberIds.forEach(function (id) {
+      const s = getSlotById(id);
+      if (s) s.score = clampScore(s.score + delta);
+    });
+    saveSlots();
+    renderAll();
+    playScoreDing();
+    showGroupScoreToast(group, delta);
+  }
+
   function applyDailyEmojiStates() {
     const today = todayDateKey();
     let pack = null;
@@ -1389,6 +1739,7 @@
   function renderAll() {
     if (!gridEl) return;
     slots.forEach(renderSlotElement);
+    renderGroupButtons();
   }
 
   function closeQuickScoreMenu() {
@@ -1406,6 +1757,7 @@
     activeScoreMenuSlotId = null;
     renderSlotElement(slot);
     playScoreDing();
+    showScoreToast(slot, delta);
   }
 
   function forceHatchSlot(slotId) {
@@ -1493,6 +1845,7 @@
 
     if (teacherMode) {
       closeQuickScoreMenu();
+      const oldScore = slot.score;
       const input = prompt(
         "請輸入新的分數（0～" + SCORE_MAX + "）：",
         String(slot.score)
@@ -1504,8 +1857,13 @@
         return;
       }
       slot.score = clampScore(n);
+      const delta = slot.score - oldScore;
       saveSlots();
       renderSlotElement(slot);
+      if (delta !== 0) {
+        playScoreDing();
+        showScoreToast(slot, delta);
+      }
       return;
     }
     if (activeScoreMenuSlotId === slotId) {
@@ -1533,7 +1891,8 @@
       "」\n\n請輸入操作編號：\n" +
       "1 = 修改學生姓名\n" +
       "2 = 變回蛋（取消孵化）\n" +
-      "3 = 與其他號碼交換神獸物種";
+      "3 = 與其他號碼交換神獸物種\n" +
+      "4 = 指定／變更組別";
 
     const choice = prompt(menu, "1");
     if (choice === null) return;
@@ -1604,6 +1963,11 @@
       return;
     }
 
+    if (choice.trim() === "4") {
+      assignSlotToGroup(slot.id);
+      return;
+    }
+
     alert("無效的操作編號。");
   }
 
@@ -1655,6 +2019,7 @@
     if (!gridEl) return;
 
     loadSlots();
+    loadGroups();
 
     slots.forEach(function (s) {
       if (s.id === 15) {
@@ -1685,6 +2050,8 @@
     });
 
     renderAll();
+    ensureGroupPanel();
+    renderGroupButtons();
     startAnimationCycle();
   }
 
