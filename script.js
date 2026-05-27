@@ -52,11 +52,13 @@
   const SPECIAL_PHASE_MS = 2500;
   const SPECIAL_ANIMATIONS = [
     "run",
+    "walk",
     "eat",
     "dance",
     "gesture-positive",
     "gesture-negative",
     "static",
+    "jump",
   ];
 
   const QUICK_ADD_VALUES = [1, 2, 3, 4, 5];
@@ -208,9 +210,8 @@
   }
 
   function applySpecialPhase() {
-    const special = pickRandomSpecialAnimation();
     forEachHatchedViewer(function (mv) {
-      setViewerAnimation(mv, special);
+      setViewerAnimation(mv, pickRandomSpecialAnimation());
     });
   }
 

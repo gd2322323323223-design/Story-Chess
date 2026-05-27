@@ -24,7 +24,7 @@ body {
 body {
   font-family: "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif;
   background-color: var(--bg-deep);
-  background-image: url("bg.jpg");
+  background-image: url("images/bg.png");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
