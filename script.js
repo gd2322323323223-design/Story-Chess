@@ -62,20 +62,20 @@
   ];
 
   const QUICK_ADD_VALUES = [1, 2, 3, 4, 5];
-  // 低飽和、柔和深色漸層（莫蘭迪系），襯托 3D 模型細節
+  // 繽紛鮮明漸層（半透明 + 磨砂），適合低年級、襯托 3D 動物
   const SLOT_GRADIENTS = [
-    "linear-gradient(145deg, rgba(43, 61, 82, 0.82) 0%, rgba(26, 37, 51, 0.82) 100%)",
-    "linear-gradient(145deg, rgba(42, 74, 63, 0.82) 0%, rgba(27, 47, 40, 0.82) 100%)",
-    "linear-gradient(145deg, rgba(58, 63, 71, 0.82) 0%, rgba(36, 42, 49, 0.82) 100%)",
-    "linear-gradient(145deg, rgba(74, 69, 56, 0.82) 0%, rgba(46, 43, 36, 0.82) 100%)",
-    "linear-gradient(145deg, rgba(61, 53, 80, 0.82) 0%, rgba(37, 32, 51, 0.82) 100%)",
-    "linear-gradient(145deg, rgba(51, 64, 85, 0.82) 0%, rgba(33, 40, 54, 0.82) 100%)",
-    "linear-gradient(145deg, rgba(47, 74, 79, 0.82) 0%, rgba(29, 49, 53, 0.82) 100%)",
-    "linear-gradient(145deg, rgba(63, 58, 74, 0.82) 0%, rgba(39, 35, 48, 0.82) 100%)",
-    "linear-gradient(145deg, rgba(53, 66, 63, 0.82) 0%, rgba(34, 44, 41, 0.82) 100%)",
-    "linear-gradient(145deg, rgba(74, 66, 56, 0.82) 0%, rgba(45, 40, 34, 0.82) 100%)",
-    "linear-gradient(145deg, rgba(62, 58, 50, 0.82) 0%, rgba(38, 35, 30, 0.82) 100%)",
-    "linear-gradient(145deg, rgba(74, 58, 53, 0.82) 0%, rgba(44, 33, 30, 0.82) 100%)",
+    "linear-gradient(145deg, rgba(255, 107, 129, 0.55) 0%, rgba(255, 183, 77, 0.55) 100%)",
+    "linear-gradient(145deg, rgba(77, 208, 255, 0.55) 0%, rgba(92, 124, 250, 0.55) 100%)",
+    "linear-gradient(145deg, rgba(105, 240, 174, 0.55) 0%, rgba(56, 203, 137, 0.55) 100%)",
+    "linear-gradient(145deg, rgba(255, 238, 88, 0.55) 0%, rgba(255, 171, 64, 0.55) 100%)",
+    "linear-gradient(145deg, rgba(206, 147, 255, 0.55) 0%, rgba(151, 117, 250, 0.55) 100%)",
+    "linear-gradient(145deg, rgba(255, 158, 205, 0.55) 0%, rgba(255, 107, 180, 0.55) 100%)",
+    "linear-gradient(145deg, rgba(72, 219, 251, 0.55) 0%, rgba(0, 184, 148, 0.55) 100%)",
+    "linear-gradient(145deg, rgba(255, 159, 67, 0.55) 0%, rgba(255, 99, 132, 0.55) 100%)",
+    "linear-gradient(145deg, rgba(162, 155, 254, 0.55) 0%, rgba(116, 185, 255, 0.55) 100%)",
+    "linear-gradient(145deg, rgba(255, 217, 61, 0.55) 0%, rgba(255, 107, 107, 0.55) 100%)",
+    "linear-gradient(145deg, rgba(129, 236, 236, 0.55) 0%, rgba(116, 185, 255, 0.55) 100%)",
+    "linear-gradient(145deg, rgba(255, 154, 162, 0.55) 0%, rgba(250, 177, 160, 0.55) 100%)",
   ];
 
   const gridEl = document.getElementById("dashboard-grid");
