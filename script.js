@@ -119,6 +119,7 @@
   let webAudioCtx = null;
   let luckyDrawRunning = false;
   let luckyDrawTimerId = null;
+  let luckyDrawSuspenseTimer = null;
   let luckyDrawFlashId = null;
   let luckyDrawWinnerIds = [];
 
@@ -475,31 +476,144 @@
     return webAudioCtx;
   }
 
-  /** 加分：短促上揚電子「叮叮」，可重疊播放 */
+  /** 加分：單音節極短清脆上揚「叮！」，每次點擊獨立節點可重疊 */
   function playScoreDing() {
     const ctx = getWebAudioContext();
     if (!ctx) return;
 
     const t = ctx.currentTime;
-    const notes = [
-      { freq: 620, at: 0, dur: 0.12 },
-      { freq: 880, at: 0.1, dur: 0.14 },
-      { freq: 1180, at: 0.22, dur: 0.18 },
-    ];
+    const dur = 0.1;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
 
-    notes.forEach(function (note) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(note.freq, t + note.at);
-      gain.gain.setValueAtTime(0.0001, t + note.at);
-      gain.gain.exponentialRampToValueAtTime(0.28, t + note.at + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + note.at + note.dur);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(t + note.at);
-      osc.stop(t + note.at + note.dur + 0.05);
-    });
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(1200, t);
+    osc.frequency.exponentialRampToValueAtTime(1800, t + dur);
+
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.32, t + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  }
+
+  /** 孵化：Q 彈雙音節卡通魔法感 */
+  function playHatchSound() {
+    const ctx = getWebAudioContext();
+    if (!ctx) return;
+
+    const t = ctx.currentTime;
+
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = "triangle";
+    osc1.frequency.setValueAtTime(400, t);
+    osc1.frequency.exponentialRampToValueAtTime(600, t + 0.05);
+    gain1.gain.setValueAtTime(0.0001, t);
+    gain1.gain.exponentialRampToValueAtTime(0.34, t + 0.008);
+    gain1.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(t);
+    osc1.stop(t + 0.06);
+
+    const t2 = t + 0.055;
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = "triangle";
+    osc2.frequency.setValueAtTime(800, t2);
+    osc2.frequency.exponentialRampToValueAtTime(1500, t2 + 0.14);
+    gain2.gain.setValueAtTime(0.0001, t2);
+    gain2.gain.exponentialRampToValueAtTime(0.38, t2 + 0.01);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, t2 + 0.18);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(t2);
+    osc2.stop(t2 + 0.22);
+  }
+
+  function playLuckyDrawPulse() {
+    const ctx = getWebAudioContext();
+    if (!ctx) return;
+
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(95, t);
+    osc.frequency.exponentialRampToValueAtTime(58, t + 0.09);
+
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.42, t + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.13);
+  }
+
+  function stopLuckyDrawSuspense() {
+    if (luckyDrawSuspenseTimer !== null) {
+      clearTimeout(luckyDrawSuspenseTimer);
+      luckyDrawSuspenseTimer = null;
+    }
+  }
+
+  function scheduleLuckyDrawSuspense(startedAt) {
+    const elapsed = Date.now() - startedAt;
+    if (elapsed >= LUCKY_DRAW_MS || !luckyDrawRunning) {
+      stopLuckyDrawSuspense();
+      return;
+    }
+
+    playLuckyDrawPulse();
+    const progress = elapsed / LUCKY_DRAW_MS;
+    const interval = Math.max(100, 500 - progress * 400);
+
+    luckyDrawSuspenseTimer = setTimeout(function () {
+      scheduleLuckyDrawSuspense(startedAt);
+    }, interval);
+  }
+
+  /** 抽籤揭曉：響亮慶祝「叮！」 */
+  function playLuckyWinFanfare() {
+    const ctx = getWebAudioContext();
+    if (!ctx) return;
+
+    const t = ctx.currentTime;
+    const dur = 0.22;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(880, t);
+    osc.frequency.exponentialRampToValueAtTime(1760, t + dur);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.45, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+
+    const t2 = t + 0.08;
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(1320, t2);
+    osc2.frequency.exponentialRampToValueAtTime(2093, t2 + 0.15);
+    gain2.gain.setValueAtTime(0.0001, t2);
+    gain2.gain.exponentialRampToValueAtTime(0.35, t2 + 0.015);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, t2 + 0.16);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(t2);
+    osc2.stop(t2 + 0.18);
   }
 
   /** 倒計時結束：清脆提示音 */
@@ -694,27 +808,58 @@
     return pool.slice(0, count);
   }
 
+  function buildLuckyWinnerRow(slot) {
+    const row = document.createElement("div");
+    row.className = "lucky-winner-row";
+
+    const nameCol = document.createElement("div");
+    nameCol.className = "lucky-winner-row__name";
+    nameCol.innerHTML =
+      '<span class="lucky-winner-row__slot-num">第 ' +
+      slot.id +
+      " 號</span>" +
+      '<span class="lucky-winner-row__student">' +
+      (slot.name || DEFAULT_NAME) +
+      "</span>";
+
+    const beastCol = document.createElement("div");
+    beastCol.className = "lucky-winner-row__beast";
+
+    if (slot.hatched) {
+      const mv = document.createElement("model-viewer");
+      mv.className = "lucky-winner-row__viewer";
+      mv.src = "models/animal-" + slot.animal + ".glb";
+      mv.alt = slot.name + " 的神獸";
+      mv.setAttribute("autoplay", "");
+      mv.setAttribute("auto-rotate", "");
+      mv.setAttribute("rotation-per-second", "18deg");
+      mv.setAttribute("camera-orbit", "0deg 75deg auto");
+      mv.setAttribute("shadow-intensity", "0.85");
+      mv.setAttribute("environment-image", "neutral");
+      setViewerAnimation(mv, IDLE_ANIM);
+      beastCol.appendChild(mv);
+    } else {
+      const egg = document.createElement("div");
+      egg.className = "lucky-winner-row__egg";
+      egg.style.setProperty("--egg-hue", String(eggHueForSlot(slot.id)));
+      beastCol.appendChild(egg);
+    }
+
+    row.appendChild(nameCol);
+    row.appendChild(beastCol);
+    return row;
+  }
+
   function showLuckyResultModal(winnerIds) {
     const modal = document.getElementById("lucky-result-modal");
-    const listEl = document.getElementById("lucky-modal-list");
-    if (!modal || !listEl) return;
+    const bodyEl = document.getElementById("lucky-modal-body");
+    if (!modal || !bodyEl) return;
 
-    listEl.innerHTML = "";
+    bodyEl.innerHTML = "";
     winnerIds.forEach(function (id) {
       const slot = getSlotById(id);
       if (!slot) return;
-      const li = document.createElement("li");
-      li.className = "lucky-modal__item";
-      li.innerHTML =
-        '<span class="lucky-modal__item-num">' +
-        id +
-        "</span>" +
-        '<div class="lucky-modal__item-body"><strong>' +
-        (slot.name || DEFAULT_NAME) +
-        "</strong><span>" +
-        beastDisplayName(slot) +
-        "</span></div>";
-      listEl.appendChild(li);
+      bodyEl.appendChild(buildLuckyWinnerRow(slot));
     });
 
     modal.hidden = false;
@@ -723,18 +868,22 @@
 
   function closeLuckyResultModal() {
     const modal = document.getElementById("lucky-result-modal");
+    const bodyEl = document.getElementById("lucky-modal-body");
+    if (bodyEl) bodyEl.innerHTML = "";
     if (modal) modal.hidden = true;
     document.body.classList.remove("lucky-modal-open");
     clearLuckyDrawVisuals();
   }
 
   function finishLuckyDraw(count) {
+    stopLuckyDrawSuspense();
     luckyDrawRunning = false;
     document.body.classList.remove("lucky-draw-running");
     luckyDrawFlashId = null;
 
     luckyDrawWinnerIds = pickUniqueWinnerIds(count);
     refreshAllSlotDrawClasses();
+    playLuckyWinFanfare();
     showLuckyResultModal(luckyDrawWinnerIds);
 
     const btn = document.getElementById("btn-lucky-start");
@@ -754,8 +903,10 @@
 
     if (input) input.value = String(count);
 
+    closeToolsSidebar();
     closeLuckyResultModal();
     clearLuckyDrawVisuals();
+    getWebAudioContext();
 
     luckyDrawRunning = true;
     document.body.classList.add("lucky-draw-running");
@@ -768,6 +919,8 @@
 
     const startedAt = Date.now();
     setLuckyDrawFlash(pickRandomSlotId());
+    stopLuckyDrawSuspense();
+    scheduleLuckyDrawSuspense(startedAt);
 
     if (luckyDrawTimerId !== null) {
       clearInterval(luckyDrawTimerId);
@@ -1180,7 +1333,7 @@
     slot.hatched = true;
     saveSlots();
     renderSlotElement(slot);
-    void playFreesoundEffect("rocket");
+    playHatchSound();
   }
 
   function forceEggSlot(slotId) {
@@ -1411,7 +1564,7 @@
       slot.hatched = true;
       saveSlots();
       renderSlotElement(slot);
-      void playFreesoundEffect("hatch");
+      playHatchSound();
       alert("🎉 " + slot.id + " 號 " + slot.name + " 的神獸孵化成功！");
     }
   }
