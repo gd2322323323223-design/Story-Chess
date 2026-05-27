@@ -290,6 +290,11 @@
   const FREESOUND_TOKEN =
     (typeof window !== "undefined" && window.FREESOUND_API_KEY) || "";
 
+  // 針對指定 Sound ID 的快取（避免每次重新打 Freesound）
+  const SOUND_ID_SCORE = 361603;
+  const SOUND_ID_TIMER = 81159;
+  const freesoundIdUrlCache = {};
+
   const FREESOUND_EFFECTS = {
     cheer: {
       query: "applause cheer short",
@@ -360,6 +365,51 @@
       if (url) return url;
     }
     return null;
+  }
+
+  async function fetchFreesoundPreviewUrlById(soundId) {
+    if (!FREESOUND_TOKEN) return null;
+    if (freesoundIdUrlCache[soundId]) return freesoundIdUrlCache[soundId];
+
+    try {
+      const params = new URLSearchParams({
+        token: FREESOUND_TOKEN,
+        fields: "id,name,previews",
+      });
+      const res = await fetch(
+        "https://freesound.org/apiv2/sounds/" + soundId + "/?" + params.toString()
+      );
+      if (!res.ok) throw new Error("Freesound sound HTTP " + res.status);
+      const data = await res.json();
+      const previews = data && data.previews;
+      const url =
+        previews &&
+        (previews["preview-hq-mp3"] || previews["preview-lq-mp3"] || null);
+      if (url) {
+        freesoundIdUrlCache[soundId] = url;
+        return url;
+      }
+      return null;
+    } catch (err) {
+      console.warn("[Freesound] 以 ID 取得預覽失敗:", soundId, err);
+      return null;
+    }
+  }
+
+  async function playFreesoundById(soundId, volume) {
+    if (!FREESOUND_TOKEN) return;
+    const url = freesoundIdUrlCache[soundId] ||
+      (await fetchFreesoundPreviewUrlById(soundId));
+    if (!url) return;
+    try {
+      const audio = new Audio(url);
+      audio.preload = "auto";
+      audio.volume = volume != null ? volume : 0.9;
+      audio.currentTime = 0;
+      await audio.play();
+    } catch (err) {
+      console.warn("[Freesound] 以 ID 播放失敗:", soundId, err);
+    }
   }
 
   async function searchFreesoundOnce(query, filter, sort) {
@@ -516,10 +566,9 @@
     osc.stop(t + dur + 0.02);
   }
 
-  /** 加分：優先使用 Freesound Cute1.mp3，否則退回本地超短合成音效 */
   function playScoreDing() {
     if (FREESOUND_TOKEN) {
-      void playFreesoundEffect("scoreCute");
+      void playFreesoundById(SOUND_ID_SCORE, 0.9);
       return;
     }
     playScoreDingFallback();
@@ -641,7 +690,7 @@
     osc2.stop(t2 + 0.18);
   }
 
-  /** 倒計時結束：Frequent tone，優先 Freesound timerCute，否則本地提示音 */
+  /** 倒計時結束：Frequent tone，本地後備提示音 */
   function playTimerAlarmFallback() {
     const ctx = getWebAudioContext();
     if (!ctx) return;
@@ -665,7 +714,7 @@
 
   function playTimerAlarm() {
     if (FREESOUND_TOKEN) {
-      void playFreesoundEffect("timerCute");
+      void playFreesoundById(SOUND_ID_TIMER, 0.9);
       return;
     }
     playTimerAlarmFallback();
