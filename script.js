@@ -79,6 +79,35 @@
     "linear-gradient(145deg, rgba(255, 154, 162, 0.55) 0%, rgba(250, 177, 160, 0.55) 100%)",
   ];
 
+  const ANIMAL_LABELS = {
+    beaver: "河狸",
+    bee: "蜜蜂",
+    bunny: "兔子",
+    cat: "小貓",
+    caterpillar: "毛毛蟲",
+    chick: "小雞",
+    cow: "乳牛",
+    crab: "螃蟹",
+    deer: "小鹿",
+    dog: "小狗",
+    elephant: "大象",
+    fish: "小魚",
+    fox: "狐狸",
+    giraffe: "長頸鹿",
+    tiger: "老虎",
+    koala: "無尾熊",
+    lion: "獅子",
+    monkey: "猴子",
+    panda: "熊貓",
+    parrot: "鸚鵡",
+    penguin: "企鵝",
+    polar: "北極熊",
+    hog: "小豬",
+  };
+
+  const LUCKY_DRAW_MS = 5000;
+  const LUCKY_DRAW_TICK_MS = 75;
+
   const gridEl = document.getElementById("dashboard-grid");
   const btnTeacherMode = document.getElementById("btn-teacher-mode");
 
@@ -86,6 +115,21 @@
   let teacherMode = false;
   let animCycleTimeoutId = null;
   let activeScoreMenuSlotId = null;
+
+  let webAudioCtx = null;
+  let luckyDrawRunning = false;
+  let luckyDrawTimerId = null;
+  let luckyDrawFlashId = null;
+  let luckyDrawWinnerIds = [];
+
+  let timerMode = "stopwatch";
+  let timerRunning = false;
+  let timerIntervalId = null;
+  let stopwatchElapsedMs = 0;
+  let stopwatchStartTs = 0;
+  let countdownRemainingMs = 0;
+  let countdownEndTs = 0;
+  let timerAlarmPlayed = false;
 
   function animalForSlot(id) {
     return ANIMALS[(id - 1) % ANIMALS.length];
@@ -419,30 +463,65 @@
     }
   }
 
-  function playCorrectAnswerCheer() {
-    try {
-      const spec = FREESOUND_EFFECTS.cheer;
-      if (!spec || !FREESOUND_TOKEN) return;
-
-      const player = cheerAudioPlayer || freesoundPreloadedAudio.cheer;
-      if (player && player.src) {
-        player.volume = spec.volume != null ? spec.volume : 0.8;
-        player.currentTime = 0;
-        player.play().catch(function (err) {
-          console.warn("[Freesound] 歡呼播放失敗:", err);
-        });
-        return;
-      }
-
-      ensureFreesoundPreloaded("cheer").then(function (loaded) {
-        if (!loaded) return;
-        cheerAudioPlayer = loaded;
-        loaded.currentTime = 0;
-        loaded.play().catch(function () {});
-      });
-    } catch (err) {
-      console.warn("[Freesound] 歡呼觸發失敗:", err);
+  function getWebAudioContext() {
+    if (!webAudioCtx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      webAudioCtx = new Ctx();
     }
+    if (webAudioCtx.state === "suspended") {
+      webAudioCtx.resume().catch(function () {});
+    }
+    return webAudioCtx;
+  }
+
+  /** 加分：短促上揚電子「叮叮」，可重疊播放 */
+  function playScoreDing() {
+    const ctx = getWebAudioContext();
+    if (!ctx) return;
+
+    const t = ctx.currentTime;
+    const notes = [
+      { freq: 620, at: 0, dur: 0.12 },
+      { freq: 880, at: 0.1, dur: 0.14 },
+      { freq: 1180, at: 0.22, dur: 0.18 },
+    ];
+
+    notes.forEach(function (note) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(note.freq, t + note.at);
+      gain.gain.setValueAtTime(0.0001, t + note.at);
+      gain.gain.exponentialRampToValueAtTime(0.28, t + note.at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + note.at + note.dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t + note.at);
+      osc.stop(t + note.at + note.dur + 0.05);
+    });
+  }
+
+  /** 倒計時結束：清脆提示音 */
+  function playTimerAlarm() {
+    const ctx = getWebAudioContext();
+    if (!ctx) return;
+
+    const t = ctx.currentTime;
+    [0, 0.15, 0.3].forEach(function (offset, i) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = i === 2 ? "triangle" : "sine";
+      const freq = i === 2 ? 1320 : 880;
+      osc.frequency.setValueAtTime(freq, t + offset);
+      gain.gain.setValueAtTime(0.0001, t + offset);
+      gain.gain.exponentialRampToValueAtTime(0.35, t + offset + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + offset + 0.2);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t + offset);
+      osc.stop(t + offset + 0.25);
+    });
   }
 
   async function playFreesoundEffect(effectKey) {
@@ -559,6 +638,396 @@
       JSON.stringify({ date: today, emojis: emojis })
     );
     saveSlots();
+  }
+
+  function beastDisplayName(slot) {
+    if (!slot.hatched) return "🥚 神獸蛋";
+    const label = ANIMAL_LABELS[slot.animal] || slot.animal;
+    return label + " 神獸";
+  }
+
+  function getSlotElement(slotId) {
+    return document.querySelector('[data-slot-id="' + slotId + '"]');
+  }
+
+  function applySlotDrawClasses(el, slotId) {
+    if (!el) return;
+    el.classList.toggle("slot--draw-flash", luckyDrawFlashId === slotId);
+    el.classList.toggle("slot--draw-winner", luckyDrawWinnerIds.indexOf(slotId) >= 0);
+  }
+
+  function refreshAllSlotDrawClasses() {
+    document.querySelectorAll(".slot").forEach(function (el) {
+      const id = parseInt(el.dataset.slotId, 10);
+      if (!Number.isNaN(id)) applySlotDrawClasses(el, id);
+    });
+  }
+
+  function clearLuckyDrawVisuals() {
+    luckyDrawFlashId = null;
+    luckyDrawWinnerIds = [];
+    refreshAllSlotDrawClasses();
+  }
+
+  function setLuckyDrawFlash(slotId) {
+    const prev = luckyDrawFlashId;
+    luckyDrawFlashId = slotId;
+    if (prev !== slotId) {
+      applySlotDrawClasses(getSlotElement(prev), prev);
+      applySlotDrawClasses(getSlotElement(slotId), slotId);
+    }
+  }
+
+  function pickRandomSlotId() {
+    return Math.floor(Math.random() * SLOT_COUNT) + 1;
+  }
+
+  function pickUniqueWinnerIds(count) {
+    const pool = [];
+    for (let i = 1; i <= SLOT_COUNT; i++) pool.push(i);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = pool[i];
+      pool[i] = pool[j];
+      pool[j] = tmp;
+    }
+    return pool.slice(0, count);
+  }
+
+  function showLuckyResultModal(winnerIds) {
+    const modal = document.getElementById("lucky-result-modal");
+    const listEl = document.getElementById("lucky-modal-list");
+    if (!modal || !listEl) return;
+
+    listEl.innerHTML = "";
+    winnerIds.forEach(function (id) {
+      const slot = getSlotById(id);
+      if (!slot) return;
+      const li = document.createElement("li");
+      li.className = "lucky-modal__item";
+      li.innerHTML =
+        '<span class="lucky-modal__item-num">' +
+        id +
+        "</span>" +
+        '<div class="lucky-modal__item-body"><strong>' +
+        (slot.name || DEFAULT_NAME) +
+        "</strong><span>" +
+        beastDisplayName(slot) +
+        "</span></div>";
+      listEl.appendChild(li);
+    });
+
+    modal.hidden = false;
+    document.body.classList.add("lucky-modal-open");
+  }
+
+  function closeLuckyResultModal() {
+    const modal = document.getElementById("lucky-result-modal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("lucky-modal-open");
+    clearLuckyDrawVisuals();
+  }
+
+  function finishLuckyDraw(count) {
+    luckyDrawRunning = false;
+    document.body.classList.remove("lucky-draw-running");
+    luckyDrawFlashId = null;
+
+    luckyDrawWinnerIds = pickUniqueWinnerIds(count);
+    refreshAllSlotDrawClasses();
+    showLuckyResultModal(luckyDrawWinnerIds);
+
+    const btn = document.getElementById("btn-lucky-start");
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "🌟 開始抽籤";
+    }
+  }
+
+  function startLuckyDraw() {
+    if (luckyDrawRunning) return;
+
+    const input = document.getElementById("lucky-count");
+    let count = input ? parseInt(input.value, 10) : 1;
+    if (Number.isNaN(count)) count = 1;
+    count = Math.max(1, Math.min(SLOT_COUNT, count));
+
+    if (input) input.value = String(count);
+
+    closeLuckyResultModal();
+    clearLuckyDrawVisuals();
+
+    luckyDrawRunning = true;
+    document.body.classList.add("lucky-draw-running");
+
+    const btn = document.getElementById("btn-lucky-start");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "✨ 抽籤中…";
+    }
+
+    const startedAt = Date.now();
+    setLuckyDrawFlash(pickRandomSlotId());
+
+    if (luckyDrawTimerId !== null) {
+      clearInterval(luckyDrawTimerId);
+    }
+
+    luckyDrawTimerId = setInterval(function () {
+      if (Date.now() - startedAt >= LUCKY_DRAW_MS) {
+        clearInterval(luckyDrawTimerId);
+        luckyDrawTimerId = null;
+        finishLuckyDraw(count);
+        return;
+      }
+      setLuckyDrawFlash(pickRandomSlotId());
+    }, LUCKY_DRAW_TICK_MS);
+  }
+
+  function formatTimerMs(ms, showHours) {
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const mm = String(m).padStart(2, "0");
+    const ss = String(s).padStart(2, "0");
+    if (showHours || h > 0) {
+      return String(h).padStart(2, "0") + ":" + mm + ":" + ss;
+    }
+    return mm + ":" + ss;
+  }
+
+  function getCountdownSetupMs() {
+    const minEl = document.getElementById("timer-min");
+    const secEl = document.getElementById("timer-sec");
+    let min = minEl ? parseInt(minEl.value, 10) : 1;
+    let sec = secEl ? parseInt(secEl.value, 10) : 30;
+    if (Number.isNaN(min)) min = 0;
+    if (Number.isNaN(sec)) sec = 0;
+    min = Math.max(0, Math.min(99, min));
+    sec = Math.max(0, Math.min(59, sec));
+    return (min * 60 + sec) * 1000;
+  }
+
+  function updateTimerDisplay() {
+    const display = document.getElementById("timer-display");
+    if (!display) return;
+
+    let ms = 0;
+    if (timerMode === "stopwatch") {
+      ms = stopwatchElapsedMs;
+      if (timerRunning) {
+        ms += Date.now() - stopwatchStartTs;
+      }
+      display.textContent = formatTimerMs(ms, ms >= 3600000);
+      display.classList.remove("is-urgent");
+      return;
+    }
+
+    ms = countdownRemainingMs;
+    if (timerRunning) {
+      ms = Math.max(0, countdownEndTs - Date.now());
+    }
+    display.textContent = formatTimerMs(ms, false);
+
+    const urgent = timerRunning && ms > 0 && ms <= 10000;
+    display.classList.toggle("is-urgent", urgent);
+
+    if (timerRunning && ms <= 0 && !timerAlarmPlayed) {
+      timerAlarmPlayed = true;
+      timerRunning = false;
+      if (timerIntervalId !== null) {
+        clearInterval(timerIntervalId);
+        timerIntervalId = null;
+      }
+      countdownRemainingMs = 0;
+      display.textContent = "00:00";
+      display.classList.remove("is-urgent");
+      playTimerAlarm();
+    }
+  }
+
+  function stopTimerLoop() {
+    if (timerIntervalId !== null) {
+      clearInterval(timerIntervalId);
+      timerIntervalId = null;
+    }
+  }
+
+  function startTimerLoop() {
+    stopTimerLoop();
+    timerIntervalId = setInterval(updateTimerDisplay, 100);
+    updateTimerDisplay();
+  }
+
+  function timerStart() {
+    getWebAudioContext();
+    timerAlarmPlayed = false;
+
+    if (timerMode === "stopwatch") {
+      if (!timerRunning) {
+        stopwatchStartTs = Date.now();
+        timerRunning = true;
+        startTimerLoop();
+      }
+      return;
+    }
+
+    if (!timerRunning) {
+      if (countdownRemainingMs <= 0) {
+        countdownRemainingMs = getCountdownSetupMs();
+      }
+      if (countdownRemainingMs <= 0) {
+        countdownRemainingMs = 1000;
+      }
+      countdownEndTs = Date.now() + countdownRemainingMs;
+      timerRunning = true;
+      startTimerLoop();
+    }
+  }
+
+  function timerPause() {
+    if (!timerRunning) return;
+
+    if (timerMode === "stopwatch") {
+      stopwatchElapsedMs += Date.now() - stopwatchStartTs;
+    } else {
+      countdownRemainingMs = Math.max(0, countdownEndTs - Date.now());
+    }
+    timerRunning = false;
+    stopTimerLoop();
+    updateTimerDisplay();
+  }
+
+  function timerReset() {
+    timerRunning = false;
+    timerAlarmPlayed = false;
+    stopTimerLoop();
+
+    if (timerMode === "stopwatch") {
+      stopwatchElapsedMs = 0;
+      stopwatchStartTs = 0;
+    } else {
+      countdownRemainingMs = getCountdownSetupMs();
+      countdownEndTs = 0;
+    }
+    updateTimerDisplay();
+  }
+
+  function setTimerMode(mode) {
+    timerMode = mode;
+    timerRunning = false;
+    timerAlarmPlayed = false;
+    stopTimerLoop();
+
+    document.querySelectorAll(".timer-mode-tab").forEach(function (tab) {
+      const active = tab.dataset.timerMode === mode;
+      tab.classList.toggle("is-active", active);
+      tab.setAttribute("aria-selected", active ? "true" : "false");
+    });
+
+    const setup = document.getElementById("countdown-setup");
+    if (setup) setup.hidden = mode !== "countdown";
+
+    if (mode === "countdown") {
+      countdownRemainingMs = getCountdownSetupMs();
+    } else {
+      stopwatchElapsedMs = 0;
+    }
+    updateTimerDisplay();
+  }
+
+  function openToolsSidebar() {
+    const sidebar = document.getElementById("tools-sidebar");
+    const overlay = document.getElementById("tools-overlay");
+    const toggle = document.getElementById("btn-tools-toggle");
+    if (!sidebar) return;
+
+    sidebar.classList.add("is-open");
+    sidebar.setAttribute("aria-hidden", "false");
+    if (overlay) {
+      overlay.hidden = false;
+      overlay.classList.add("is-visible");
+      overlay.setAttribute("aria-hidden", "false");
+    }
+    if (toggle) toggle.setAttribute("aria-expanded", "true");
+    document.body.classList.add("tools-sidebar-open");
+  }
+
+  function closeToolsSidebar() {
+    const sidebar = document.getElementById("tools-sidebar");
+    const overlay = document.getElementById("tools-overlay");
+    const toggle = document.getElementById("btn-tools-toggle");
+    if (!sidebar) return;
+
+    sidebar.classList.remove("is-open");
+    sidebar.setAttribute("aria-hidden", "true");
+    if (overlay) {
+      overlay.classList.remove("is-visible");
+      overlay.setAttribute("aria-hidden", "true");
+      setTimeout(function () {
+        if (!sidebar.classList.contains("is-open")) overlay.hidden = true;
+      }, 300);
+    }
+    if (toggle) toggle.setAttribute("aria-expanded", "false");
+    document.body.classList.remove("tools-sidebar-open");
+  }
+
+  function toggleToolsSidebar() {
+    const sidebar = document.getElementById("tools-sidebar");
+    if (sidebar && sidebar.classList.contains("is-open")) {
+      closeToolsSidebar();
+    } else {
+      openToolsSidebar();
+    }
+  }
+
+  function initToolsSidebar() {
+    const toggle = document.getElementById("btn-tools-toggle");
+    const closeBtn = document.getElementById("btn-tools-close");
+    const overlay = document.getElementById("tools-overlay");
+    const luckyBtn = document.getElementById("btn-lucky-start");
+    const luckyModalClose = document.getElementById("btn-lucky-modal-close");
+    const timerStartBtn = document.getElementById("btn-timer-start");
+    const timerPauseBtn = document.getElementById("btn-timer-pause");
+    const timerResetBtn = document.getElementById("btn-timer-reset");
+
+    if (toggle) toggle.addEventListener("click", toggleToolsSidebar);
+    if (closeBtn) closeBtn.addEventListener("click", closeToolsSidebar);
+    if (overlay) overlay.addEventListener("click", closeToolsSidebar);
+    if (luckyBtn) luckyBtn.addEventListener("click", startLuckyDraw);
+    if (luckyModalClose) luckyModalClose.addEventListener("click", closeLuckyResultModal);
+
+    const luckyModal = document.getElementById("lucky-result-modal");
+    if (luckyModal) {
+      luckyModal.addEventListener("click", function (ev) {
+        if (ev.target === luckyModal) closeLuckyResultModal();
+      });
+    }
+
+    document.querySelectorAll(".timer-mode-tab").forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        setTimerMode(tab.dataset.timerMode || "stopwatch");
+      });
+    });
+
+    if (timerStartBtn) timerStartBtn.addEventListener("click", timerStart);
+    if (timerPauseBtn) timerPauseBtn.addEventListener("click", timerPause);
+    if (timerResetBtn) timerResetBtn.addEventListener("click", timerReset);
+
+    ["timer-min", "timer-sec"].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener("change", function () {
+          if (timerMode === "countdown" && !timerRunning) {
+            countdownRemainingMs = getCountdownSetupMs();
+            updateTimerDisplay();
+          }
+        });
+      }
+    });
+
+    setTimerMode("stopwatch");
   }
 
   function renderSlotElement(slot) {
@@ -678,6 +1147,8 @@
       egg.style.setProperty("--egg-hue", String(eggHueForSlot(slot.id)));
       stage.appendChild(egg);
     }
+
+    applySlotDrawClasses(el, slot.id);
   }
 
   function renderAll() {
@@ -699,7 +1170,7 @@
     saveSlots();
     activeScoreMenuSlotId = null;
     renderSlotElement(slot);
-    playCorrectAnswerCheer();
+    playScoreDing();
   }
 
   function forceHatchSlot(slotId) {
@@ -959,6 +1430,7 @@
     applyDailyEmojiStates();
     saveSlots();
     preloadFreesoundEffects();
+    initToolsSidebar();
 
     if (btnTeacherMode) {
       btnTeacherMode.addEventListener("click", toggleTeacherMode);

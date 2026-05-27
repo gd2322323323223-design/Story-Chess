@@ -21,15 +21,131 @@
     ⚙
   </button>
 
-  <header class="dash-header">
-    <div class="dash-header__badge">
-      <span class="dash-header__deco" aria-hidden="true">⭐</span>
-      <h1 class="dash-header__title">學生加分紀錄表</h1>
-      <span class="dash-header__deco" aria-hidden="true">⭐</span>
-    </div>
-  </header>
+  <button
+    type="button"
+    id="btn-tools-toggle"
+    class="tools-tab"
+    aria-expanded="false"
+    aria-controls="tools-sidebar"
+  >
+    <span class="tools-tab__icon" aria-hidden="true">🛠️</span>
+    <span class="tools-tab__label">功能<br />Tools</span>
+  </button>
 
-  <main id="dashboard-grid" class="dashboard-grid" aria-label="全班神獸插槽"></main>
+  <div id="tools-overlay" class="tools-overlay" hidden aria-hidden="true"></div>
+
+  <aside
+    id="tools-sidebar"
+    class="tools-sidebar"
+    aria-label="課堂功能側邊欄"
+    aria-hidden="true"
+  >
+    <header class="tools-sidebar__head">
+      <h2 class="tools-sidebar__title">🛠️ 功能 Tools</h2>
+      <button
+        type="button"
+        id="btn-tools-close"
+        class="tools-sidebar__close"
+        aria-label="關閉功能選單"
+      >
+        ✕
+      </button>
+    </header>
+
+    <section class="tools-panel" aria-labelledby="tools-lucky-title">
+      <h3 id="tools-lucky-title" class="tools-panel__title">功能 1：幸運抽</h3>
+      <p class="tools-panel__desc">隨機挑選學生，跑馬燈 5 秒後揭曉！</p>
+      <label class="tools-field" for="lucky-count">
+        <span>挑選人數（1～22）</span>
+        <input
+          id="lucky-count"
+          class="tools-input"
+          type="number"
+          min="1"
+          max="22"
+          value="1"
+        />
+      </label>
+      <button type="button" id="btn-lucky-start" class="tools-btn tools-btn--lucky">
+        🌟 開始抽籤
+      </button>
+    </section>
+
+    <section class="tools-panel" aria-labelledby="tools-timer-title">
+      <h3 id="tools-timer-title" class="tools-panel__title">功能 2：課堂計時器</h3>
+      <div class="timer-mode-tabs" role="tablist">
+        <button
+          type="button"
+          class="timer-mode-tab is-active"
+          data-timer-mode="stopwatch"
+          role="tab"
+          aria-selected="true"
+        >
+          正計時
+        </button>
+        <button
+          type="button"
+          class="timer-mode-tab"
+          data-timer-mode="countdown"
+          role="tab"
+          aria-selected="false"
+        >
+          倒計時
+        </button>
+      </div>
+
+      <div class="timer-display-wrap">
+        <div id="timer-display" class="timer-display" aria-live="polite">00:00</div>
+      </div>
+
+      <div id="countdown-setup" class="countdown-setup" hidden>
+        <label class="tools-field tools-field--inline" for="timer-min">
+          <span>分</span>
+          <input id="timer-min" class="tools-input tools-input--sm" type="number" min="0" max="99" value="1" />
+        </label>
+        <label class="tools-field tools-field--inline" for="timer-sec">
+          <span>秒</span>
+          <input id="timer-sec" class="tools-input tools-input--sm" type="number" min="0" max="59" value="30" />
+        </label>
+      </div>
+
+      <div class="timer-actions">
+        <button type="button" id="btn-timer-start" class="tools-btn tools-btn--primary">▶ 開始</button>
+        <button type="button" id="btn-timer-pause" class="tools-btn">⏸ 暫停</button>
+        <button type="button" id="btn-timer-reset" class="tools-btn tools-btn--ghost">↺ 重設</button>
+      </div>
+    </section>
+  </aside>
+
+  <div
+    id="lucky-result-modal"
+    class="lucky-modal"
+    hidden
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="lucky-modal-title"
+  >
+    <div class="lucky-modal__card">
+      <div class="lucky-modal__confetti" aria-hidden="true"></div>
+      <h2 id="lucky-modal-title" class="lucky-modal__title">🎉 幸運降臨！</h2>
+      <ul id="lucky-modal-list" class="lucky-modal__list"></ul>
+      <button type="button" id="btn-lucky-modal-close" class="tools-btn tools-btn--lucky">
+        太棒了！
+      </button>
+    </div>
+  </div>
+
+  <div class="dash-layout">
+    <header class="dash-header">
+      <div class="dash-header__badge">
+        <span class="dash-header__deco" aria-hidden="true">⭐</span>
+        <h1 class="dash-header__title">學生加分紀錄表</h1>
+        <span class="dash-header__deco" aria-hidden="true">⭐</span>
+      </div>
+    </header>
+
+    <main id="dashboard-grid" class="dashboard-grid" aria-label="全班神獸插槽"></main>
+  </div>
 
   <script src="freesound-config.js"></script>
   <script src="script.js"></script>
