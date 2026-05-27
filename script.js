@@ -2,6 +2,7 @@
   "use strict";
 
   const STORAGE_KEY = "classroom-dashboard-v1";
+  const EMOJI_DAY_STORAGE_KEY = "classroom-dashboard-emoji-day-v1";
   const SLOT_COUNT = 22;
   const DEFAULT_NAME = "待命名";
   const DEFAULT_EMOJI = "😄";
@@ -237,6 +238,329 @@
     runAnimationCycle();
   }
 
+  // ===============================
+  // ====== Freesound 聯網音效 ======
+  // ===============================
+  const FREESOUND_API_BASE = "https://freesound.org/apiv2/search/";
+  const FREESOUND_TOKEN =
+    (typeof window !== "undefined" && window.FREESOUND_API_KEY) || "";
+
+  const FREESOUND_EFFECTS = {
+    cheer: {
+      query: "applause cheer short",
+      filter: "tag:(applause OR cheer) duration:[0 TO 5]",
+      fallbackFilters: ["tag:applause duration:[0 TO 5]", "duration:[0 TO 4]"],
+      sort: "duration_asc",
+      volume: 0.8,
+    },
+    rocket: {
+      query: "level up powerup win",
+      filter: "duration:[0 TO 8]",
+      fallbackFilters: [
+        "tag:arcade duration:[0 TO 8]",
+        "tag:retro duration:[0 TO 8]",
+      ],
+      sort: "rating_desc",
+      volume: 0.48,
+    },
+    hatch: {
+      query: "magic sparkle pop",
+      filter: "tag:(magic OR sparkle OR pop) duration:[0 TO 5]",
+      fallbackFilters: ["tag:cartoon duration:[0 TO 4]"],
+      sort: "rating_desc",
+      volume: 0.72,
+    },
+    wrong: {
+      query: "oops error wrong",
+      filter: "tag:(oops OR wrong OR error) duration:[0 TO 4]",
+      fallbackFilters: [
+        "tag:oops duration:[0 TO 4]",
+        "tag:wrong duration:[0 TO 4]",
+      ],
+      sort: "duration_asc",
+      volume: 0.52,
+    },
+  };
+
+  const freesoundUrlCache = {};
+  const freesoundFetchPromises = {};
+  const freesoundPreloadedAudio = {};
+  let activeFreesoundPlayer = null;
+  let cheerAudioPlayer = null;
+
+  function pickPreviewUrlFromResults(results) {
+    if (!Array.isArray(results)) return null;
+    for (let i = 0; i < results.length; i++) {
+      const sound = results[i];
+      const previews = sound && sound.previews;
+      const url =
+        previews &&
+        (previews["preview-hq-mp3"] || previews["preview-lq-mp3"]);
+      if (url) return url;
+    }
+    return null;
+  }
+
+  async function searchFreesoundOnce(query, filter, sort) {
+    const params = new URLSearchParams({
+      query: query,
+      token: FREESOUND_TOKEN,
+      fields: "id,name,previews",
+      page_size: "8",
+      sort: sort || "rating_desc",
+    });
+    if (filter) params.set("filter", filter);
+
+    const res = await fetch(FREESOUND_API_BASE + "?" + params.toString());
+    if (!res.ok) throw new Error("Freesound HTTP " + res.status);
+    const data = await res.json();
+    return pickPreviewUrlFromResults(data.results);
+  }
+
+  async function fetchFreesoundPreviewUrl(effectKey) {
+    if (!FREESOUND_TOKEN) return null;
+    if (freesoundUrlCache[effectKey]) return freesoundUrlCache[effectKey];
+    if (freesoundFetchPromises[effectKey]) return freesoundFetchPromises[effectKey];
+
+    const spec = FREESOUND_EFFECTS[effectKey];
+    if (!spec) return null;
+
+    const filtersToTry = [spec.filter]
+      .concat(spec.fallbackFilters || [])
+      .filter(Boolean);
+
+    freesoundFetchPromises[effectKey] = (async function () {
+      try {
+        for (let i = 0; i < filtersToTry.length; i++) {
+          const url = await searchFreesoundOnce(
+            spec.query,
+            filtersToTry[i],
+            spec.sort
+          );
+          if (url) {
+            freesoundUrlCache[effectKey] = url;
+            return url;
+          }
+        }
+        const queryOnlyUrl = await searchFreesoundOnce(
+          spec.query,
+          "",
+          spec.sort
+        );
+        if (queryOnlyUrl) {
+          freesoundUrlCache[effectKey] = queryOnlyUrl;
+          return queryOnlyUrl;
+        }
+        throw new Error("No preview URL in search results");
+      } catch (err) {
+        console.warn("[Freesound] 搜尋失敗:", effectKey, err);
+        return null;
+      } finally {
+        delete freesoundFetchPromises[effectKey];
+      }
+    })();
+
+    return freesoundFetchPromises[effectKey];
+  }
+
+  async function ensureFreesoundPreloaded(effectKey) {
+    if (!FREESOUND_TOKEN) return null;
+
+    try {
+      const spec = FREESOUND_EFFECTS[effectKey];
+      if (!spec) return null;
+
+      const existing = freesoundPreloadedAudio[effectKey];
+      if (existing && existing.dataset.ready === "1") return existing;
+
+      const url = await fetchFreesoundPreviewUrl(effectKey);
+      if (!url) return null;
+
+      const player = existing || new Audio();
+      player.preload = "auto";
+      player.volume = spec.volume != null ? spec.volume : 0.8;
+      freesoundPreloadedAudio[effectKey] = player;
+
+      if (player.src !== url) {
+        player.dataset.ready = "0";
+        player.src = url;
+        player.load();
+      }
+
+      await new Promise(function (resolve) {
+        if (player.readyState >= 3) {
+          player.dataset.ready = "1";
+          resolve();
+          return;
+        }
+        const done = function () {
+          player.dataset.ready = "1";
+          resolve();
+        };
+        player.addEventListener("canplaythrough", done, { once: true });
+        player.addEventListener("error", resolve, { once: true });
+        setTimeout(resolve, 2500);
+      });
+
+      return player;
+    } catch (err) {
+      console.warn("[Freesound] 預載失敗:", effectKey, err);
+      return null;
+    }
+  }
+
+  async function preloadCheerSound() {
+    if (!FREESOUND_TOKEN) return;
+    try {
+      const player = await ensureFreesoundPreloaded("cheer");
+      if (player) cheerAudioPlayer = player;
+    } catch (err) {
+      console.warn("[Freesound] 歡呼預載失敗:", err);
+    }
+  }
+
+  function playCorrectAnswerCheer() {
+    try {
+      const spec = FREESOUND_EFFECTS.cheer;
+      if (!spec || !FREESOUND_TOKEN) return;
+
+      const player = cheerAudioPlayer || freesoundPreloadedAudio.cheer;
+      if (player && player.src) {
+        player.volume = spec.volume != null ? spec.volume : 0.8;
+        player.currentTime = 0;
+        player.play().catch(function (err) {
+          console.warn("[Freesound] 歡呼播放失敗:", err);
+        });
+        return;
+      }
+
+      ensureFreesoundPreloaded("cheer").then(function (loaded) {
+        if (!loaded) return;
+        cheerAudioPlayer = loaded;
+        loaded.currentTime = 0;
+        loaded.play().catch(function () {});
+      });
+    } catch (err) {
+      console.warn("[Freesound] 歡呼觸發失敗:", err);
+    }
+  }
+
+  async function playFreesoundEffect(effectKey) {
+    try {
+      const spec = FREESOUND_EFFECTS[effectKey];
+      if (!spec || !FREESOUND_TOKEN) return;
+
+      let url = freesoundUrlCache[effectKey] || null;
+      const preloaded = freesoundPreloadedAudio[effectKey];
+      if (preloaded && preloaded.src) {
+        url = preloaded.src;
+      }
+      if (!url) {
+        url = await fetchFreesoundPreviewUrl(effectKey);
+      }
+      if (!url) return;
+
+      if (activeFreesoundPlayer) {
+        try {
+          activeFreesoundPlayer.pause();
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      const player =
+        preloaded && preloaded.src === url ? preloaded : new Audio(url);
+      player.volume = spec.volume != null ? spec.volume : 0.8;
+      player.currentTime = 0;
+      activeFreesoundPlayer = player;
+      await player.play();
+    } catch (err) {
+      console.warn("[Freesound] 播放失敗:", effectKey, err);
+    }
+  }
+
+  function preloadFreesoundEffects() {
+    if (!FREESOUND_TOKEN) return;
+    preloadCheerSound();
+    Object.keys(FREESOUND_EFFECTS).forEach(function (key) {
+      if (key === "cheer") return;
+      ensureFreesoundPreloaded(key).catch(function () {});
+    });
+  }
+
+  function todayDateKey() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + day;
+  }
+
+  function hashSlotDay(slotId, dateKey) {
+    let h = 2166136261;
+    const str = dateKey + ":" + slotId;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return Math.abs(h);
+  }
+
+  function pickDailyEmoji(slotId, dateKey) {
+    const idx = hashSlotDay(slotId, dateKey) % EMOJI_OPTIONS.length;
+    return EMOJI_OPTIONS[idx];
+  }
+
+  function syncDailyEmojiSlot(slotId, emoji) {
+    const today = todayDateKey();
+    let pack = null;
+    try {
+      pack = JSON.parse(localStorage.getItem(EMOJI_DAY_STORAGE_KEY));
+    } catch (e) {
+      pack = null;
+    }
+    if (!pack || pack.date !== today || !Array.isArray(pack.emojis)) {
+      return;
+    }
+    pack.emojis[slotId - 1] = emoji;
+    localStorage.setItem(EMOJI_DAY_STORAGE_KEY, JSON.stringify(pack));
+  }
+
+  function applyDailyEmojiStates() {
+    const today = todayDateKey();
+    let pack = null;
+    try {
+      pack = JSON.parse(localStorage.getItem(EMOJI_DAY_STORAGE_KEY));
+    } catch (e) {
+      pack = null;
+    }
+
+    if (
+      pack &&
+      pack.date === today &&
+      Array.isArray(pack.emojis) &&
+      pack.emojis.length === SLOT_COUNT
+    ) {
+      slots.forEach(function (s) {
+        s.emoji = pack.emojis[s.id - 1] || pickDailyEmoji(s.id, today);
+      });
+      return;
+    }
+
+    const emojis = [];
+    for (let id = 1; id <= SLOT_COUNT; id++) {
+      emojis.push(pickDailyEmoji(id, today));
+    }
+    slots.forEach(function (s) {
+      s.emoji = emojis[s.id - 1];
+    });
+    localStorage.setItem(
+      EMOJI_DAY_STORAGE_KEY,
+      JSON.stringify({ date: today, emojis: emojis })
+    );
+    saveSlots();
+  }
+
   function renderSlotElement(slot) {
     let el = document.querySelector('[data-slot-id="' + slot.id + '"]');
     if (!el) {
@@ -375,6 +699,7 @@
     saveSlots();
     activeScoreMenuSlotId = null;
     renderSlotElement(slot);
+    playCorrectAnswerCheer();
   }
 
   function forceHatchSlot(slotId) {
@@ -384,6 +709,7 @@
     slot.hatched = true;
     saveSlots();
     renderSlotElement(slot);
+    void playFreesoundEffect("rocket");
   }
 
   function forceEggSlot(slotId) {
@@ -450,6 +776,7 @@
       return;
     }
     slot.emoji = EMOJI_OPTIONS[n - 1];
+    syncDailyEmojiSlot(slotId, slot.emoji);
     saveSlots();
     renderSlotElement(slot);
   }
@@ -613,6 +940,7 @@
       slot.hatched = true;
       saveSlots();
       renderSlotElement(slot);
+      void playFreesoundEffect("hatch");
       alert("🎉 " + slot.id + " 號 " + slot.name + " 的神獸孵化成功！");
     }
   }
@@ -626,10 +954,11 @@
       if (s.id === 15) {
         s.animal = "tiger";
       }
-      if (!s.emoji) s.emoji = DEFAULT_EMOJI;
       if (typeof s.score !== "number") s.score = 0;
     });
+    applyDailyEmojiStates();
     saveSlots();
+    preloadFreesoundEffects();
 
     if (btnTeacherMode) {
       btnTeacherMode.addEventListener("click", toggleTeacherMode);
