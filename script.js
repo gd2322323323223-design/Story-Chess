@@ -62,18 +62,18 @@
   const QUICK_ADD_VALUES = [1, 2, 3, 4, 5];
   // 低飽和、柔和深色漸層（莫蘭迪系），襯托 3D 模型細節
   const SLOT_GRADIENTS = [
-    "linear-gradient(145deg, #2b3d52 0%, #1a2533 100%)",
-    "linear-gradient(145deg, #2a4a3f 0%, #1b2f28 100%)",
-    "linear-gradient(145deg, #3a3f47 0%, #242a31 100%)",
-    "linear-gradient(145deg, #4a4538 0%, #2e2b24 100%)",
-    "linear-gradient(145deg, #3d3550 0%, #252033 100%)",
-    "linear-gradient(145deg, #334055 0%, #212836 100%)",
-    "linear-gradient(145deg, #2f4a4f 0%, #1d3135 100%)",
-    "linear-gradient(145deg, #3f3a4a 0%, #272330 100%)",
-    "linear-gradient(145deg, #35423f 0%, #222c29 100%)",
-    "linear-gradient(145deg, #4a4238 0%, #2d2822 100%)",
-    "linear-gradient(145deg, #3e3a32 0%, #26231e 100%)",
-    "linear-gradient(145deg, #4a3a35 0%, #2c211e 100%)",
+    "linear-gradient(145deg, rgba(43, 61, 82, 0.82) 0%, rgba(26, 37, 51, 0.82) 100%)",
+    "linear-gradient(145deg, rgba(42, 74, 63, 0.82) 0%, rgba(27, 47, 40, 0.82) 100%)",
+    "linear-gradient(145deg, rgba(58, 63, 71, 0.82) 0%, rgba(36, 42, 49, 0.82) 100%)",
+    "linear-gradient(145deg, rgba(74, 69, 56, 0.82) 0%, rgba(46, 43, 36, 0.82) 100%)",
+    "linear-gradient(145deg, rgba(61, 53, 80, 0.82) 0%, rgba(37, 32, 51, 0.82) 100%)",
+    "linear-gradient(145deg, rgba(51, 64, 85, 0.82) 0%, rgba(33, 40, 54, 0.82) 100%)",
+    "linear-gradient(145deg, rgba(47, 74, 79, 0.82) 0%, rgba(29, 49, 53, 0.82) 100%)",
+    "linear-gradient(145deg, rgba(63, 58, 74, 0.82) 0%, rgba(39, 35, 48, 0.82) 100%)",
+    "linear-gradient(145deg, rgba(53, 66, 63, 0.82) 0%, rgba(34, 44, 41, 0.82) 100%)",
+    "linear-gradient(145deg, rgba(74, 66, 56, 0.82) 0%, rgba(45, 40, 34, 0.82) 100%)",
+    "linear-gradient(145deg, rgba(62, 58, 50, 0.82) 0%, rgba(38, 35, 30, 0.82) 100%)",
+    "linear-gradient(145deg, rgba(74, 58, 53, 0.82) 0%, rgba(44, 33, 30, 0.82) 100%)",
   ];
 
   const gridEl = document.getElementById("dashboard-grid");
@@ -285,7 +285,7 @@
       gridEl.appendChild(el);
     }
 
-    el.style.backgroundImage = slotGradientByPosition(slot.id);
+    el.style.setProperty("--slot-gradient", slotGradientByPosition(slot.id));
 
     el.classList.toggle("is-hatched", slot.hatched);
     el.querySelector(".slot__num").textContent = String(slot.id);
