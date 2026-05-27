@@ -24,7 +24,7 @@ body {
 body {
   font-family: "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif;
   background-color: var(--bg-deep);
-  background-image: url("images/bg.png?v=3");
+  background-image: url("images/bg.png?v=6");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -855,8 +855,15 @@ body.teacher-mode-active .slot {
   justify-content: center;
 }
 
-.group-btn {
+.group-btn-wrap {
+  position: relative;
   flex: 1 1 calc(50% - 0.2rem);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.group-btn {
+  width: 100%;
   min-width: 0;
   max-width: 100%;
   padding: 0.35rem 0.4rem;
@@ -880,6 +887,69 @@ body.teacher-mode-active .slot {
 .group-btn.is-empty {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.group-score-quick-menu {
+  display: none;
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.35rem);
+  transform: translateX(-50%);
+  z-index: 12;
+  gap: 0.3rem;
+  padding: 0.35rem 0.4rem;
+  border-radius: 12px;
+  border: 1px solid rgba(180, 83, 9, 0.35);
+  background: rgba(255, 251, 235, 0.96);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 28px rgba(61, 37, 10, 0.28);
+  pointer-events: none;
+}
+
+.group-score-quick-menu.is-open {
+  display: flex;
+  pointer-events: auto;
+  animation: groupScoreBubbleIn 0.18s ease-out;
+}
+
+.group-score-quick-menu.is-open::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: rgba(255, 251, 235, 0.96);
+}
+
+@keyframes groupScoreBubbleIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.group-score-quick-btn {
+  min-width: 1.8rem;
+  height: 1.55rem;
+  border-radius: 7px;
+  border: 1px solid rgba(180, 83, 9, 0.4);
+  background: linear-gradient(180deg, #fef9c3 0%, #fde047 100%);
+  color: #78350f;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 0.35rem;
+}
+
+.group-score-quick-btn:hover {
+  background: linear-gradient(180deg, #fde68a 0%, #fbbf24 100%);
+  border-color: rgba(146, 64, 14, 0.55);
 }
 
 .group-score-panel__empty {
@@ -1187,8 +1257,20 @@ body.teacher-mode-active .slot__teacher-tools {
 
 .slot__footer-part--name {
   width: 52%;
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: clamp(1.12rem, 2.6vw, 1.32rem);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #1a1208;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 252, 245, 0.97) 0%,
+    rgba(254, 243, 199, 0.95) 100%
+  );
+  border: 1.5px solid rgba(120, 53, 15, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 2px 8px rgba(61, 37, 10, 0.18);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1351,7 +1433,7 @@ body.teacher-mode-active .slot__teacher-tools {
 
   .slot__footer-part--name {
     width: 50%;
-    font-size: 0.82rem;
+    font-size: clamp(1rem, 3.8vw, 1.15rem);
   }
 
   .score-quick-menu {

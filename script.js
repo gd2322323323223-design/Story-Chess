@@ -117,6 +117,7 @@
   let teacherMode = false;
   let animCycleTimeoutId = null;
   let activeScoreMenuSlotId = null;
+  let activeGroupScoreMenuId = null;
 
   let webAudioCtx = null;
   let luckyDrawRunning = false;
@@ -963,19 +964,46 @@
     }
 
     groups.forEach(function (g) {
+      const count = g.memberIds.length;
+      const wrapItem = document.createElement("div");
+      wrapItem.className = "group-btn-wrap";
+      wrapItem.dataset.groupId = String(g.id);
+
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "group-btn";
-      const count = g.memberIds.length;
       btn.textContent = g.name + (count ? " (" + count + ")" : "");
       btn.title = count
         ? "為「" + g.name + "」" + count + " 位成員加分"
         : "此組尚無成員";
       if (!count) btn.classList.add("is-empty");
-      btn.addEventListener("click", function () {
-        onGroupAddScore(g.id);
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        onGroupButtonClick(g.id);
       });
-      wrap.appendChild(btn);
+
+      const quickMenu = document.createElement("div");
+      quickMenu.className = "group-score-quick-menu";
+      quickMenu.setAttribute("role", "menu");
+      QUICK_ADD_VALUES.forEach(function (delta) {
+        const qb = document.createElement("button");
+        qb.type = "button";
+        qb.className = "group-score-quick-btn";
+        qb.textContent = "+" + delta;
+        qb.setAttribute("role", "menuitem");
+        qb.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          applyGroupQuickScore(g.id, delta);
+        });
+        quickMenu.appendChild(qb);
+      });
+      const menuOpen = activeGroupScoreMenuId === g.id && !teacherMode;
+      quickMenu.classList.toggle("is-open", menuOpen);
+      quickMenu.setAttribute("aria-hidden", menuOpen ? "false" : "true");
+
+      wrapItem.appendChild(btn);
+      wrapItem.appendChild(quickMenu);
+      wrap.appendChild(wrapItem);
     });
   }
 
@@ -1121,26 +1149,14 @@
     alert(slotId + " 號已加入「" + target.name + "」。");
   }
 
-  function onGroupAddScore(groupId) {
-    if (!teacherMode && !ensureTeacherModeOn()) return;
-    const group = getGroupById(groupId);
-    if (!group) return;
-    if (!group.memberIds.length) {
-      alert("「" + group.name + "」目前沒有成員，請先在教師模式下指定學生加入組別。");
-      return;
-    }
+  function closeGroupQuickScoreMenu() {
+    if (activeGroupScoreMenuId === null) return;
+    activeGroupScoreMenuId = null;
+    renderGroupButtons();
+  }
 
-    const raw = prompt(
-      "要為「" + group.name + "」全組加幾分？（可輸入正負整數，0 取消）",
-      "1"
-    );
-    if (raw === null) return;
-    const delta = parseInt(raw, 10);
-    if (!Number.isFinite(delta) || delta === 0) {
-      if (raw !== "0") alert("請輸入非 0 的整數。");
-      return;
-    }
-
+  function applyGroupScoreDelta(group, delta) {
+    if (!group || !delta) return;
     group.memberIds.forEach(function (id) {
       const s = getSlotById(id);
       if (s) s.score = clampScore(s.score + delta);
@@ -1149,6 +1165,51 @@
     renderAll();
     playScoreDing();
     showGroupScoreToast(group, delta);
+  }
+
+  function onGroupButtonClick(groupId) {
+    const group = getGroupById(groupId);
+    if (!group) return;
+    if (!group.memberIds.length) {
+      alert(
+        "「" +
+          group.name +
+          "」目前沒有成員，請先在教師模式下指定學生加入組別。"
+      );
+      return;
+    }
+
+    if (teacherMode) {
+      closeGroupQuickScoreMenu();
+      closeQuickScoreMenu();
+      const raw = prompt(
+        "要為「" + group.name + "」全組加幾分？（可輸入正負整數，0 取消）",
+        "1"
+      );
+      if (raw === null) return;
+      const delta = parseInt(raw, 10);
+      if (!Number.isFinite(delta) || delta === 0) {
+        if (raw !== "0") alert("請輸入非 0 的整數。");
+        return;
+      }
+      applyGroupScoreDelta(group, delta);
+      return;
+    }
+
+    closeQuickScoreMenu();
+    if (activeGroupScoreMenuId === groupId) {
+      activeGroupScoreMenuId = null;
+    } else {
+      activeGroupScoreMenuId = groupId;
+    }
+    renderGroupButtons();
+  }
+
+  function applyGroupQuickScore(groupId, delta) {
+    const group = getGroupById(groupId);
+    if (!group || !group.memberIds.length) return;
+    activeGroupScoreMenuId = null;
+    applyGroupScoreDelta(group, delta);
   }
 
   function applyDailyEmojiStates() {
@@ -1749,6 +1810,11 @@
     if (prev) renderSlotElement(prev);
   }
 
+  function closeAllQuickScoreMenus() {
+    closeQuickScoreMenu();
+    closeGroupQuickScoreMenu();
+  }
+
   function applyQuickScore(slotId, delta) {
     const slot = getSlotById(slotId);
     if (!slot) return;
@@ -1810,7 +1876,7 @@
       return;
     }
     teacherMode = false;
-    closeQuickScoreMenu();
+    closeAllQuickScoreMenus();
     refreshTeacherModeUI();
     alert("教師模式已關閉。");
   }
@@ -1866,6 +1932,7 @@
       }
       return;
     }
+    closeGroupQuickScoreMenu();
     if (activeScoreMenuSlotId === slotId) {
       activeScoreMenuSlotId = null;
     } else {
@@ -2036,16 +2103,25 @@
       btnTeacherMode.addEventListener("click", toggleTeacherMode);
     }
     document.addEventListener("click", function (ev) {
-      if (activeScoreMenuSlotId === null) return;
-      const current = document.querySelector(
-        '[data-slot-id="' + activeScoreMenuSlotId + '"]'
-      );
-      if (!current) {
-        activeScoreMenuSlotId = null;
-        return;
+      if (activeScoreMenuSlotId !== null) {
+        const current = document.querySelector(
+          '[data-slot-id="' + activeScoreMenuSlotId + '"]'
+        );
+        if (!current) {
+          activeScoreMenuSlotId = null;
+        } else if (!current.contains(ev.target)) {
+          closeQuickScoreMenu();
+        }
       }
-      if (!current.contains(ev.target)) {
-        closeQuickScoreMenu();
+      if (activeGroupScoreMenuId !== null) {
+        const groupWrap = document.querySelector(
+          '[data-group-id="' + activeGroupScoreMenuId + '"]'
+        );
+        if (!groupWrap) {
+          activeGroupScoreMenuId = null;
+        } else if (!groupWrap.contains(ev.target)) {
+          closeGroupQuickScoreMenu();
+        }
       }
     });
 
