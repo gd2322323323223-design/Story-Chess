@@ -59,12 +59,30 @@
     "static",
   ];
 
+  const QUICK_ADD_VALUES = [1, 2, 3, 4, 5];
+  // 高對比預設色盤：紅/藍/綠/金/銀/白/紫/橘等
+  const SLOT_GRADIENTS = [
+    "linear-gradient(135deg, #ff2a2a, #7f0000)", // vivid red
+    "linear-gradient(135deg, #1e40ff, #001a88)", // sapphire blue
+    "linear-gradient(135deg, #00c853, #006b2d)", // emerald green
+    "linear-gradient(135deg, #ffd700, #8a6b00)", // gold
+    "linear-gradient(135deg, #d9dde2, #7f8891)", // silver
+    "linear-gradient(135deg, rgba(255,255,255,0.92), rgba(198,210,224,0.55))", // bright white
+    "linear-gradient(135deg, #8a2be2, #3e0a70)", // purple
+    "linear-gradient(135deg, #ff8c00, #7a3a00)", // orange
+    "linear-gradient(135deg, #00bcd4, #005e69)", // cyan
+    "linear-gradient(135deg, #ff1493, #7a0b49)", // magenta
+    "linear-gradient(135deg, #39ff14, #1c6f0d)", // neon green
+    "linear-gradient(135deg, #ff4d4d, #4a0f0f)", // rose red
+  ];
+
   const gridEl = document.getElementById("dashboard-grid");
   const btnTeacherMode = document.getElementById("btn-teacher-mode");
 
   let slots = [];
   let teacherMode = false;
   let animCycleTimeoutId = null;
+  let activeScoreMenuSlotId = null;
 
   function animalForSlot(id) {
     return ANIMALS[(id - 1) % ANIMALS.length];
@@ -78,19 +96,14 @@
     return Math.round(((id - 1) / SLOT_COUNT) * 360);
   }
 
-  function randomSlotGradient(id) {
-    const baseHue = (id * 37) % 360;
-    const h1 = baseHue;
-    const h2 = (baseHue + 30) % 360;
-    return (
-      "linear-gradient(135deg," +
-      " hsl(" +
-      h1 +
-      ", 55%, 20%)," +
-      " hsl(" +
-      h2 +
-      ", 55%, 10%))"
-    );
+  function slotGradientByPosition(id) {
+    const idx = id - 1;
+    const row = Math.floor(idx / 6);
+    const col = idx % 6;
+    // 以列/欄混合跳步，避免左右上下顏色接近
+    const paletteIndex =
+      (row * 5 + col * 7 + row * col * 3) % SLOT_GRADIENTS.length;
+    return SLOT_GRADIENTS[paletteIndex];
   }
 
   function clampScore(v) {
@@ -238,7 +251,8 @@
         '  <button type="button" class="slot__footer-part slot__footer-part--emoji" aria-label="狀態表情"></button>' +
         '  <div class="slot__footer-part slot__footer-part--name"></div>' +
         '  <button type="button" class="slot__footer-part slot__footer-part--score" aria-label="得分"></button>' +
-        "</div>";
+        "</div>" +
+        '<div class="score-quick-menu" hidden></div>';
 
       el.addEventListener("click", function () {
         onSlotClick(slot.id);
@@ -252,7 +266,7 @@
       gridEl.appendChild(el);
     }
 
-    el.style.backgroundImage = randomSlotGradient(slot.id);
+    el.style.backgroundImage = slotGradientByPosition(slot.id);
 
     el.classList.toggle("is-hatched", slot.hatched);
     el.querySelector(".slot__num").textContent = String(slot.id);
@@ -260,6 +274,7 @@
     const footerEmoji = el.querySelector(".slot__footer-part--emoji");
     const footerName = el.querySelector(".slot__footer-part--name");
     const footerScore = el.querySelector(".slot__footer-part--score");
+    const quickMenu = el.querySelector(".score-quick-menu");
 
     if (footerEmoji) {
       footerEmoji.textContent = slot.emoji || DEFAULT_EMOJI;
@@ -279,6 +294,24 @@
         ev.stopPropagation();
         onScoreClick(slot.id);
       };
+    }
+
+    if (quickMenu) {
+      quickMenu.innerHTML = "";
+      QUICK_ADD_VALUES.forEach(function (delta) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "score-quick-btn";
+        btn.textContent = "+" + delta;
+        btn.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          applyQuickScore(slot.id, delta);
+        });
+        quickMenu.appendChild(btn);
+      });
+      const isOpen = activeScoreMenuSlotId === slot.id && !teacherMode;
+      quickMenu.hidden = !isOpen;
+      quickMenu.classList.toggle("is-open", isOpen);
     }
 
     const stage = el.querySelector(".slot__stage");
@@ -306,6 +339,22 @@
   function renderAll() {
     if (!gridEl) return;
     slots.forEach(renderSlotElement);
+  }
+
+  function closeQuickScoreMenu() {
+    if (activeScoreMenuSlotId === null) return;
+    const prev = getSlotById(activeScoreMenuSlotId);
+    activeScoreMenuSlotId = null;
+    if (prev) renderSlotElement(prev);
+  }
+
+  function applyQuickScore(slotId, delta) {
+    const slot = getSlotById(slotId);
+    if (!slot) return;
+    slot.score = clampScore(slot.score + delta);
+    saveSlots();
+    activeScoreMenuSlotId = null;
+    renderSlotElement(slot);
   }
 
   function ensureTeacherModeOn() {
@@ -337,6 +386,7 @@
       btnTeacherMode.classList.remove("is-active");
       btnTeacherMode.title = "教師模式";
     }
+    closeQuickScoreMenu();
     alert("教師模式已關閉。");
   }
 
@@ -383,19 +433,16 @@
       renderSlotElement(slot);
       return;
     }
-
-    const deltaStr = prompt(
-      "快速加分：輸入 1～5 將 +1～+5 分（目前：" + slot.score + "）",
-      "1"
-    );
-    if (deltaStr === null) return;
-    const d = parseInt(deltaStr, 10);
-    if (Number.isNaN(d) || d < 1 || d > 5) {
-      alert("請輸入 1～5 之間的數字。");
-      return;
+    if (activeScoreMenuSlotId === slotId) {
+      activeScoreMenuSlotId = null;
+    } else {
+      const prev = activeScoreMenuSlotId;
+      activeScoreMenuSlotId = slotId;
+      if (prev !== null && prev !== slotId) {
+        const prevSlot = getSlotById(prev);
+        if (prevSlot) renderSlotElement(prevSlot);
+      }
     }
-    slot.score = clampScore(slot.score + d);
-    saveSlots();
     renderSlotElement(slot);
   }
 
@@ -490,6 +537,7 @@
     if (!slot) return;
 
     if (teacherMode) {
+      closeQuickScoreMenu();
       onSlotTeacherAction(slotId);
       return;
     }
@@ -544,6 +592,19 @@
     if (btnTeacherMode) {
       btnTeacherMode.addEventListener("click", toggleTeacherMode);
     }
+    document.addEventListener("click", function (ev) {
+      if (activeScoreMenuSlotId === null) return;
+      const current = document.querySelector(
+        '[data-slot-id="' + activeScoreMenuSlotId + '"]'
+      );
+      if (!current) {
+        activeScoreMenuSlotId = null;
+        return;
+      }
+      if (!current.contains(ev.target)) {
+        closeQuickScoreMenu();
+      }
+    });
 
     renderAll();
     startAnimationCycle();
