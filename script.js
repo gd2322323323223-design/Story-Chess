@@ -1284,6 +1284,11 @@
       btn.className = "bulk-score-quick-btn";
       btn.textContent = "+" + delta;
       btn.setAttribute("data-bulk-delta", String(delta));
+      btn.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        onBulkScoreAction(delta);
+      });
       container.appendChild(btn);
     });
   }
@@ -1336,7 +1341,7 @@
           ev.stopPropagation();
           const delta = parseInt(deltaBtn.getAttribute("data-bulk-delta"), 10);
           if (!Number.isNaN(delta)) {
-            applyBulkQuickScore(delta);
+            onBulkScoreAction(delta);
           }
           return;
         }
