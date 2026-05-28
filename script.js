@@ -2459,25 +2459,22 @@
 
     if (teacherMode) {
       closeQuickScoreMenu();
-      const oldScore = slot.score;
       const input = prompt(
-        "請輸入新的分數（0～" + SCORE_MAX + "）：",
-        String(slot.score)
+        "請輸入分數增減值（例如 +20、-20）：",
+        "+1"
       );
       if (input === null) return;
-      const n = parseInt(input, 10);
-      if (Number.isNaN(n)) {
+      const delta = parseInt(input, 10);
+      if (Number.isNaN(delta)) {
         alert("請輸入數字。");
         return;
       }
-      slot.score = clampScore(n);
-      const delta = slot.score - oldScore;
+      if (delta === 0) return;
+      slot.score = clampScore(slot.score + delta);
       saveSlots();
       renderSlotElement(slot);
-      if (delta !== 0) {
-        playScoreDing();
-        showScoreToast(slot, delta);
-      }
+      playScoreDing();
+      showScoreToast(slot, delta);
       return;
     }
     closeGroupQuickScoreMenu();

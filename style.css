@@ -241,6 +241,12 @@ body.tools-sidebar-open .tools-tab {
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
+.bulk-pick-modal .tools-btn--ghost {
+  color: #78350f;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(180, 83, 9, 0.28);
+}
+
 .timer-mode-tabs {
   display: flex;
   gap: 0.4rem;
