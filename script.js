@@ -1321,10 +1321,22 @@
     }
 
     saveSlots();
-    renderAll();
+    bulkSelectedIds.forEach(function (id) {
+      const slot = getSlotById(id);
+      if (slot) renderSlotElement(slot);
+    });
+    renderGroupButtons();
     updateBulkPickUI();
     playScoreDing();
     showBulkScoreToast(applied, delta);
+  }
+
+  function onBulkScoreAction(defaultDelta) {
+    if (!bulkSelectedIds.length) {
+      cancelBulkPick();
+      return;
+    }
+    applyBulkQuickScore(defaultDelta);
   }
 
   function setupBulkPickDelegation() {

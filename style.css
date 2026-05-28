@@ -1513,6 +1513,7 @@ body.teacher-mode-active .slot__teacher-tools {
 .slot__footer-part--name {
   width: 52%;
   font-size: clamp(1.12rem, 2.6vw, 1.32rem);
+  font-weight: 900;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
