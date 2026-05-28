@@ -147,6 +147,7 @@
   let groups = [];
   let scoreToastTimeoutId = null;
   let groupPanelInitialized = false;
+  let bulkPickUiInitialized = false;
 
   function animalForSlot(id) {
     return ANIMALS[(id - 1) % ANIMALS.length];
@@ -1103,6 +1104,8 @@
   }
 
   function updateBulkPickUI() {
+    normalizeBulkSelectedIds();
+    ensureBulkScoreButtons();
     const countEl = document.getElementById("bulk-pick-count");
     const bar = document.getElementById("bulk-score-bar");
     const label = document.getElementById("bulk-score-bar-label");
@@ -1231,17 +1234,55 @@
     }, 2200);
   }
 
+  function normalizeBulkSelectedIds() {
+    bulkSelectedIds = bulkSelectedIds
+      .map(function (id) {
+        return parseInt(id, 10);
+      })
+      .filter(function (id) {
+        return !Number.isNaN(id) && id >= 1 && id <= SLOT_COUNT;
+      });
+  }
+
+  function ensureBulkScoreButtons() {
+    const quickWrap = document.getElementById("bulk-score-quick-btns");
+    if (!quickWrap) return;
+    if (quickWrap.querySelector("[data-bulk-delta]")) return;
+
+    quickWrap.innerHTML = "";
+    QUICK_ADD_VALUES.forEach(function (delta) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "bulk-score-quick-btn";
+      btn.textContent = "+" + delta;
+      btn.setAttribute("data-bulk-delta", String(delta));
+      quickWrap.appendChild(btn);
+    });
+  }
+
   function applyBulkQuickScore(delta) {
+    normalizeBulkSelectedIds();
     if (!bulkSelectedIds.length || !delta) return;
 
+    let applied = 0;
     bulkSelectedIds.forEach(function (id) {
       const s = getSlotById(id);
-      if (s) s.score = clampScore(s.score + delta);
+      if (s) {
+        s.score = clampScore(s.score + delta);
+        applied += 1;
+      }
     });
+    if (!applied) {
+      alert("找不到已揀選的學生資料，請重新揀選。");
+      cancelBulkPick();
+      return;
+    }
+
     saveSlots();
     renderAll();
+    updateBulkPickUI();
     playScoreDing();
-    showBulkScoreToast(bulkSelectedIds.length, delta);
+    showBulkScoreToast(applied, delta);
   }
 
   function onBulkScoreAction(defaultDelta) {
@@ -1271,9 +1312,32 @@
   }
 
   function initBulkPickUI() {
+    if (bulkPickUiInitialized) {
+      ensureBulkScoreButtons();
+      return;
+    }
+    bulkPickUiInitialized = true;
+
+    ensureBulkScoreButtons();
+
+    const bar = document.getElementById("bulk-score-bar");
+    if (bar) {
+      bar.addEventListener("click", function (ev) {
+        const btn = ev.target.closest("[data-bulk-delta]");
+        if (!btn || !bar.contains(btn)) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const delta = parseInt(btn.getAttribute("data-bulk-delta"), 10);
+        if (!Number.isNaN(delta)) {
+          onBulkScoreAction(delta);
+        }
+      });
+    }
+
     const btnOpen = document.getElementById("btn-bulk-pick");
     if (btnOpen) {
-      btnOpen.addEventListener("click", function () {
+      btnOpen.addEventListener("click", function (ev) {
+        ev.stopPropagation();
         openBulkPickModal();
       });
     }
@@ -1313,22 +1377,6 @@
     if (modal) {
       modal.addEventListener("click", function (ev) {
         if (ev.target === modal) closeBulkPickModal();
-      });
-    }
-
-    const quickWrap = document.getElementById("bulk-score-quick-btns");
-    if (quickWrap) {
-      quickWrap.innerHTML = "";
-      QUICK_ADD_VALUES.forEach(function (delta) {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "score-quick-btn";
-        btn.textContent = "+" + delta;
-        btn.addEventListener("click", function (ev) {
-          ev.stopPropagation();
-          onBulkScoreAction(delta);
-        });
-        quickWrap.appendChild(btn);
       });
     }
 
@@ -2156,21 +2204,6 @@
         "</div>" +
         '<div class="score-quick-menu"></div>';
 
-      const btnForceHatch = el.querySelector(".slot__teacher-btn--hatch");
-      const btnForceEgg = el.querySelector(".slot__teacher-btn--egg");
-      if (btnForceHatch) {
-        btnForceHatch.addEventListener("click", function (ev) {
-          ev.stopPropagation();
-          forceHatchSlot(slot.id);
-        });
-      }
-      if (btnForceEgg) {
-        btnForceEgg.addEventListener("click", function (ev) {
-          ev.stopPropagation();
-          forceEggSlot(slot.id);
-        });
-      }
-
       el.addEventListener("click", function () {
         onSlotClick(slot.id);
       });
@@ -2192,6 +2225,23 @@
     const footerName = el.querySelector(".slot__footer-part--name");
     const footerScore = el.querySelector(".slot__footer-part--score");
     const quickMenu = el.querySelector(".score-quick-menu");
+
+    const btnForceHatch = el.querySelector(".slot__teacher-btn--hatch");
+    const btnForceEgg = el.querySelector(".slot__teacher-btn--egg");
+    if (btnForceHatch) {
+      btnForceHatch.onclick = function (ev) {
+        ev.stopPropagation();
+        ev.preventDefault();
+        forceHatchSlot(slot.id);
+      };
+    }
+    if (btnForceEgg) {
+      btnForceEgg.onclick = function (ev) {
+        ev.stopPropagation();
+        ev.preventDefault();
+        forceEggSlot(slot.id);
+      };
+    }
 
     if (footerEmoji) {
       footerEmoji.textContent = slot.emoji || DEFAULT_EMOJI;
@@ -2292,10 +2342,15 @@
     if (!teacherMode && !ensureTeacherModeOn()) return;
     const slot = getSlotById(slotId);
     if (!slot) return;
+    if (slot.hatched) {
+      alert(slot.id + " 號「" + slot.name + "」已經孵化過了。");
+      return;
+    }
     slot.hatched = true;
     saveSlots();
     renderSlotElement(slot);
     playHatchSound();
+    alert("⚡ 已強制孵化 " + slot.id + " 號「" + slot.name + "」！");
   }
 
   function forceEggSlot(slotId) {
@@ -2370,6 +2425,11 @@
   function onScoreClick(slotId) {
     const slot = getSlotById(slotId);
     if (!slot) return;
+
+    if (bulkPickActive) {
+      toggleBulkSlot(slotId);
+      return;
+    }
 
     if (teacherMode) {
       closeQuickScoreMenu();
@@ -2592,6 +2652,7 @@
       }
     });
 
+    initBulkPickUI();
     renderAll();
     ensureGroupPanel();
     renderGroupButtons();

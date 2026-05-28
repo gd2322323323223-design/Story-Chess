@@ -1105,8 +1105,9 @@ body.teacher-mode-active .slot {
   left: 50%;
   bottom: 1.25rem;
   transform: translateX(-50%);
-  z-index: 275;
+  z-index: 310;
   display: flex;
+  pointer-events: auto;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
@@ -1138,10 +1139,24 @@ body.teacher-mode-active .slot {
   justify-content: center;
 }
 
-.bulk-score-bar__btns .score-quick-btn {
-  color: #78350f;
-  border-color: rgba(180, 83, 9, 0.4);
+.bulk-score-quick-btn {
+  min-width: 1.8rem;
+  height: 1.55rem;
+  border-radius: 7px;
+  border: 1px solid rgba(180, 83, 9, 0.4);
   background: linear-gradient(180deg, #fef9c3 0%, #fde047 100%);
+  color: #78350f;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 0.35rem;
+  pointer-events: auto;
+}
+
+.bulk-score-quick-btn:hover {
+  background: linear-gradient(180deg, #fde68a 0%, #fbbf24 100%);
+  border-color: rgba(146, 64, 14, 0.55);
 }
 
 .bulk-score-bar__cancel {
@@ -1329,16 +1344,22 @@ body.teacher-mode-active .slot {
 }
 
 .slot__teacher-tools {
-  display: none;
+  display: flex;
   position: absolute;
   top: 0.4rem;
   right: 0.4rem;
-  z-index: 6;
+  z-index: 10;
   gap: 0.25rem;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
 }
 
 body.teacher-mode-active .slot__teacher-tools {
-  display: flex;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .slot__teacher-btn {
