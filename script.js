@@ -50,7 +50,7 @@
     "💢",
     "😱",
     "😴",
-    "💩",
+    "🤔",
   ];
 
   const IDLE_ANIM = "idle";
@@ -223,9 +223,11 @@
               ? savedAnimal
               : animalForSlot(id),
           emoji:
-            typeof savedEmoji === "string" && savedEmoji.length
-              ? savedEmoji
-              : DEFAULT_EMOJI,
+            savedEmoji === "💩"
+              ? "🤔"
+              : typeof savedEmoji === "string" && savedEmoji.length
+                ? savedEmoji
+                : DEFAULT_EMOJI,
           score: savedScore,
         };
       });
@@ -2460,17 +2462,45 @@
     if (teacherMode) {
       closeQuickScoreMenu();
       const input = prompt(
-        "請輸入分數增減值（例如 +20、-20）：",
-        "+1"
+        "請輸入分數：\n" +
+          "• 輸入 +20 或 -20：在目前分數上加減\n" +
+          "• 只輸入數字（如 0）：直接設為該分數\n\n" +
+          "目前分數：" +
+          slot.score,
+        String(slot.score)
       );
       if (input === null) return;
-      const delta = parseInt(input, 10);
-      if (Number.isNaN(delta)) {
-        alert("請輸入數字。");
+      const raw = input.trim();
+      if (!raw) return;
+
+      const oldScore = slot.score;
+      let delta = 0;
+
+      if (/^[+-]/.test(raw)) {
+        const change = parseInt(raw, 10);
+        if (Number.isNaN(change)) {
+          alert("請輸入有效的加減分數字。");
+          return;
+        }
+        if (change === 0) return;
+        slot.score = clampScore(slot.score + change);
+        delta = slot.score - oldScore;
+      } else {
+        const target = parseInt(raw, 10);
+        if (Number.isNaN(target)) {
+          alert("請輸入數字。");
+          return;
+        }
+        slot.score = clampScore(target);
+        delta = slot.score - oldScore;
+      }
+
+      if (delta === 0) {
+        saveSlots();
+        renderSlotElement(slot);
         return;
       }
-      if (delta === 0) return;
-      slot.score = clampScore(slot.score + delta);
+
       saveSlots();
       renderSlotElement(slot);
       playScoreDing();

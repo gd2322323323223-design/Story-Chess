@@ -464,34 +464,72 @@ body.lucky-draw-running .slot {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 1.25rem 1rem;
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  gap: 0.65rem;
+  padding: 1.5rem 1.25rem;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 252, 235, 0.92) 0%,
+    rgba(255, 236, 179, 0.88) 55%,
+    rgba(255, 213, 128, 0.85) 100%
+  );
   text-align: center;
+  position: relative;
+}
+
+.lucky-winner-row__name::before {
+  content: "幸運得主";
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.35em;
+  text-indent: 0.35em;
+  color: rgba(93, 45, 120, 0.72);
+  text-transform: none;
 }
 
 .lucky-winner-row__slot-num {
-  font-size: 1rem;
-  font-weight: 800;
-  color: #9933ff;
-  margin-bottom: 0.5rem;
-  letter-spacing: 0.05em;
+  display: inline-block;
+  font-size: clamp(1.1rem, 2.2vw, 1.45rem);
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: #5d2d78;
+  padding: 0.4rem 1.1rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    #fff9e6 0%,
+    #ffe082 55%,
+    #ffca28 100%
+  );
+  border: 2px solid rgba(153, 51, 255, 0.35);
+  box-shadow:
+    0 3px 0 rgba(93, 45, 120, 0.22),
+    0 6px 16px rgba(255, 193, 7, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .lucky-winner-row__student {
-  font-size: clamp(2.5rem, 6vw, 5rem);
+  font-size: clamp(2.25rem, 5.5vw, 4.25rem);
   font-weight: 900;
-  line-height: 1.15;
-  letter-spacing: 0.06em;
-  color: #3d1a5a;
-  text-shadow:
-    -2px -2px 0 #fff,
-    2px -2px 0 #fff,
-    -2px 2px 0 #fff,
-    2px 2px 0 #fff,
-    0 4px 0 #240e3b;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+  color: #4a2518;
+  background: linear-gradient(180deg, #6b3a1f 0%, #3d1f12 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(255, 255, 255, 0.75))
+    drop-shadow(0 4px 12px rgba(255, 193, 7, 0.35));
   word-break: break-word;
+  max-width: 100%;
+  padding: 0 0.25rem;
+}
+
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .lucky-winner-row__student {
+    color: #4a2518;
+    -webkit-text-fill-color: #4a2518;
+  }
 }
 
 .lucky-winner-row__beast {
