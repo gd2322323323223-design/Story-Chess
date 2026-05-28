@@ -1168,7 +1168,7 @@
       li.className = "bulk-pick-item";
       const checked = bulkSelectedIds.indexOf(slot.id) >= 0;
       li.innerHTML =
-        '<input type="checkbox" class="bulk-pick-item__check" data-slot-id="' +
+        '<input type="checkbox" class="bulk-pick-item__check" data-bulk-slot-id="' +
         slot.id +
         '"' +
         (checked ? " checked" : "") +
@@ -1199,7 +1199,7 @@
     if (!list) return [];
     const ids = [];
     list.querySelectorAll(".bulk-pick-item__check:checked").forEach(function (el) {
-      const id = parseInt(el.getAttribute("data-slot-id"), 10);
+      const id = parseInt(el.getAttribute("data-bulk-slot-id"), 10);
       if (!Number.isNaN(id)) ids.push(id);
     });
     return ids;
@@ -1763,7 +1763,7 @@
   }
 
   function getSlotElement(slotId) {
-    return document.querySelector('[data-slot-id="' + slotId + '"]');
+    return document.querySelector('.slot[data-slot-id="' + slotId + '"]');
   }
 
   function applySlotDrawClasses(el, slotId) {
@@ -2213,7 +2213,7 @@
   }
 
   function renderSlotElement(slot) {
-    let el = document.querySelector('[data-slot-id="' + slot.id + '"]');
+    let el = document.querySelector('.slot[data-slot-id="' + slot.id + '"]');
     if (!el) {
       el = document.createElement("article");
       el.className = "slot";
@@ -2659,7 +2659,7 @@
     document.addEventListener("click", function (ev) {
       if (activeScoreMenuSlotId !== null) {
         const current = document.querySelector(
-          '[data-slot-id="' + activeScoreMenuSlotId + '"]'
+          '.slot[data-slot-id="' + activeScoreMenuSlotId + '"]'
         );
         if (!current) {
           activeScoreMenuSlotId = null;
