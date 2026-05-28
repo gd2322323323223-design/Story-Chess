@@ -148,6 +148,7 @@
   let bulkPickActive = false;
   let bulkSuccessIds = [];
   let bulkSuccessTimerId = null;
+  let bulkUiBindingsDone = false;
   let groups = [];
   let scoreToastTimeoutId = null;
   let groupPanelInitialized = false;
@@ -1327,61 +1328,66 @@
     applyBulkQuickScore(defaultDelta);
   }
 
-  function setupBulkPickDelegation() {
-    if (setupBulkPickDelegation.done) return;
-    setupBulkPickDelegation.done = true;
+  function initBulkUiBindings() {
+    if (bulkUiBindingsDone) return;
+    bulkUiBindingsDone = true;
 
-    document.addEventListener(
-      "click",
-      function (ev) {
-        if (ev.target.closest("#btn-bulk-pick")) {
-          ev.stopPropagation();
-          openBulkPickModal();
-          return;
-        }
+    const btnBulkPick = document.getElementById("btn-bulk-pick");
+    if (btnBulkPick) {
+      btnBulkPick.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openBulkPickModal();
+      });
+    }
 
-        if (ev.target.closest("#btn-bulk-pick-confirm")) {
-          ev.preventDefault();
-          confirmBulkPick();
-          return;
-        }
+    const btnBulkConfirm = document.getElementById("btn-bulk-pick-confirm");
+    if (btnBulkConfirm) {
+      btnBulkConfirm.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        confirmBulkPick();
+      });
+    }
 
-        if (ev.target.closest("#btn-bulk-pick-close")) {
-          closeBulkPickModal();
-          return;
-        }
+    const btnBulkClose = document.getElementById("btn-bulk-pick-close");
+    if (btnBulkClose) {
+      btnBulkClose.addEventListener("click", function () {
+        closeBulkPickModal();
+      });
+    }
 
-        if (ev.target.closest("#btn-bulk-pick-cancel")) {
-          ev.preventDefault();
-          cancelBulkPick();
-          return;
-        }
+    const btnBulkCancel = document.getElementById("btn-bulk-pick-cancel");
+    if (btnBulkCancel) {
+      btnBulkCancel.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        cancelBulkPick();
+      });
+    }
 
-        if (ev.target.closest("#btn-bulk-select-all")) {
-          document
-            .querySelectorAll(".bulk-pick-item__check")
-            .forEach(function (el) {
-              el.checked = true;
-            });
-          return;
-        }
+    const btnBulkAll = document.getElementById("btn-bulk-select-all");
+    if (btnBulkAll) {
+      btnBulkAll.addEventListener("click", function () {
+        document.querySelectorAll(".bulk-pick-item__check").forEach(function (el) {
+          el.checked = true;
+        });
+      });
+    }
 
-        if (ev.target.closest("#btn-bulk-select-none")) {
-          document
-            .querySelectorAll(".bulk-pick-item__check")
-            .forEach(function (el) {
-              el.checked = false;
-            });
-          return;
-        }
+    const btnBulkNone = document.getElementById("btn-bulk-select-none");
+    if (btnBulkNone) {
+      btnBulkNone.addEventListener("click", function () {
+        document.querySelectorAll(".bulk-pick-item__check").forEach(function (el) {
+          el.checked = false;
+        });
+      });
+    }
 
-        const bulkModal = document.getElementById("bulk-pick-modal");
-        if (bulkModal && ev.target === bulkModal) {
-          closeBulkPickModal();
-        }
-      },
-      true
-    );
+    const bulkModal = document.getElementById("bulk-pick-modal");
+    if (bulkModal) {
+      bulkModal.addEventListener("click", function (ev) {
+        if (ev.target === bulkModal) closeBulkPickModal();
+      });
+    }
 
     const btnAlarmClose = document.getElementById("btn-timer-alarm-close");
     if (btnAlarmClose) {
@@ -2675,7 +2681,7 @@
 
     renderAll();
     ensureGroupPanel();
-    setupBulkPickDelegation();
+    initBulkUiBindings();
     renderGroupButtons();
     startAnimationCycle();
   }
