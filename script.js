@@ -1133,7 +1133,6 @@
 
   function updateBulkPickUI() {
     normalizeBulkSelectedIds();
-    ensureBulkScoreButtons();
     const count = bulkSelectedIds.length;
     const showBulkScore = bulkPickActive && count > 0;
 
@@ -1277,33 +1276,6 @@
       });
   }
 
-  function fillBulkScoreButtonContainer(container) {
-    if (!container) return;
-    container.innerHTML = "";
-    QUICK_ADD_VALUES.forEach(function (delta) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "bulk-score-quick-btn";
-      btn.textContent = "+" + delta;
-      btn.setAttribute("data-bulk-delta", String(delta));
-      btn.addEventListener("click", function (ev) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        onBulkScoreAction(delta);
-      });
-      container.appendChild(btn);
-    });
-  }
-
-  function ensureBulkScoreButtons() {
-    fillBulkScoreButtonContainer(
-      document.getElementById("bulk-score-inline-btns")
-    );
-    fillBulkScoreButtonContainer(
-      document.getElementById("bulk-score-quick-btns")
-    );
-  }
-
   function applyBulkQuickScore(delta) {
     normalizeBulkSelectedIds();
     if (!bulkSelectedIds.length || !delta) return;
@@ -1434,7 +1406,13 @@
       "</div>" +
       '<div id="bulk-score-inline" class="group-score-panel__bulk-score" hidden>' +
       '<p id="bulk-score-inline-label" class="group-score-panel__bulk-score-label">已揀選 0 人</p>' +
-      '<div id="bulk-score-inline-btns" class="group-score-panel__bulk-btns"></div>' +
+      '<div id="bulk-score-inline-btns" class="group-score-panel__bulk-btns">' +
+      '<button type="button" class="bulk-score-quick-btn" data-bulk-delta="1">+1</button>' +
+      '<button type="button" class="bulk-score-quick-btn" data-bulk-delta="2">+2</button>' +
+      '<button type="button" class="bulk-score-quick-btn" data-bulk-delta="3">+3</button>' +
+      '<button type="button" class="bulk-score-quick-btn" data-bulk-delta="4">+4</button>' +
+      '<button type="button" class="bulk-score-quick-btn" data-bulk-delta="5">+5</button>' +
+      "</div>" +
       '<button type="button" id="btn-bulk-pick-cancel" class="group-score-panel__bulk-cancel">取消揀選</button>' +
       "</div>" +
       '<div class="group-score-panel__head">' +
@@ -1444,7 +1422,17 @@
       '<div id="group-buttons" class="group-score-panel__buttons"></div>';
 
     gridEl.appendChild(panel);
-    ensureBulkScoreButtons();
+
+    panel.querySelectorAll(".bulk-score-quick-btn").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const delta = parseInt(btn.getAttribute("data-bulk-delta"), 10);
+        if (!Number.isNaN(delta)) {
+          onBulkScoreAction(delta);
+        }
+      });
+    });
 
     document.getElementById("btn-group-manage").addEventListener("click", function () {
       if (!teacherMode && !ensureTeacherModeOn()) return;
