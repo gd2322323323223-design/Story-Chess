@@ -12,6 +12,8 @@
   const SCORE_MIN = 0;
   const SCORE_MAX = 999;
   const TEACHER_PASSWORD = "1234";
+  const SITE_ACCESS_PASSWORD = "2756";
+  const SITE_ACCESS_SESSION_KEY = "classroom-site-access-ok-v1";
 
   /** 23 種動物（與 models/animal-*.glb 檔名一致）：1~22 號依序對應前 22 種 */
   const ANIMALS = [
@@ -971,6 +973,31 @@
   function pickDailyEmoji(slotId, dateKey) {
     const idx = hashSlotDay(slotId, dateKey) % EMOJI_OPTIONS.length;
     return EMOJI_OPTIONS[idx];
+  }
+
+  function ensureSiteAccess() {
+    try {
+      if (sessionStorage.getItem(SITE_ACCESS_SESSION_KEY) === "1") return true;
+    } catch (e) {}
+
+    while (true) {
+      const input = prompt("請輸入網站進入密碼：");
+      if (input === null) {
+        document.body.innerHTML =
+          '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;">' +
+          '<div style="max-width:420px;padding:1rem 1.25rem;border-radius:12px;background:#fff7ed;color:#7c2d12;border:2px solid #fdba74;font-weight:700;text-align:center;">' +
+          "未輸入正確密碼，已停止進入網站。" +
+          "</div></main>";
+        return false;
+      }
+      if (input.trim() === SITE_ACCESS_PASSWORD) {
+        try {
+          sessionStorage.setItem(SITE_ACCESS_SESSION_KEY, "1");
+        } catch (e) {}
+        return true;
+      }
+      alert("密碼錯誤，請再試一次。");
+    }
   }
 
   function syncDailyEmojiSlot(slotId, emoji) {
@@ -2599,6 +2626,7 @@
 
   function boot() {
     if (!gridEl) return;
+    if (!ensureSiteAccess()) return;
 
     loadSlots();
     loadGroups();
