@@ -476,16 +476,6 @@ body.lucky-draw-running .slot {
   position: relative;
 }
 
-.lucky-winner-row__name::before {
-  content: "幸運得主";
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.35em;
-  text-indent: 0.35em;
-  color: rgba(93, 45, 120, 0.72);
-  text-transform: none;
-}
-
 .lucky-winner-row__slot-num {
   display: inline-block;
   font-size: clamp(1.1rem, 2.2vw, 1.45rem);
@@ -508,7 +498,7 @@ body.lucky-draw-running .slot {
 }
 
 .lucky-winner-row__student {
-  font-size: clamp(2.25rem, 5.5vw, 4.25rem);
+  font-size: clamp(3rem, 6.8vw, 5.2rem);
   font-weight: 900;
   line-height: 1.2;
   letter-spacing: 0.08em;
@@ -530,6 +520,48 @@ body.lucky-draw-running .slot {
     color: #4a2518;
     -webkit-text-fill-color: #4a2518;
   }
+}
+
+.tools-panel--timer .tools-panel__title {
+  font-size: clamp(1.3rem, 2.7vw, 1.8rem);
+}
+
+.tools-panel--timer .timer-mode-tabs {
+  gap: 0.55rem;
+  margin-bottom: 0.95rem;
+}
+
+.tools-panel--timer .timer-mode-tab {
+  padding: 0.7rem 0.45rem;
+  font-size: 0.98rem;
+  border-radius: 12px;
+}
+
+.tools-panel--timer .timer-display-wrap {
+  padding: 1.35rem 1rem;
+  margin-bottom: 0.95rem;
+  border-radius: 16px;
+}
+
+.tools-panel--timer .timer-display {
+  font-size: clamp(3rem, 10vw, 4.3rem);
+  letter-spacing: 0.075em;
+}
+
+.tools-panel--timer .tools-field {
+  font-size: 0.95rem;
+}
+
+.tools-panel--timer .tools-input {
+  padding: 0.65rem 0.75rem;
+  font-size: 1.14rem;
+  border-radius: 11px;
+}
+
+.tools-panel--timer .tools-btn {
+  padding: 0.85rem 1rem;
+  font-size: 1.05rem;
+  border-radius: 13px;
 }
 
 .lucky-winner-row__beast {
@@ -606,7 +638,11 @@ body.lucky-draw-running .slot {
   }
 
   .lucky-winner-row__student {
-    font-size: clamp(2rem, 10vw, 3rem);
+    font-size: clamp(2.5rem, 11vw, 3.6rem);
+  }
+
+  .tools-panel--timer .timer-display {
+    font-size: clamp(2.6rem, 12vw, 3.5rem);
   }
 }
 

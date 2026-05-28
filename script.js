@@ -1626,10 +1626,10 @@
       return idx + 1 + " = " + g.name + "（" + g.memberIds.length + " 人）";
     });
     const menu =
-      "請選擇要加入的組別：\n" +
+      "請選擇要加入/移除的組別：\n" +
       lines.join("\n") +
       "\n\n0 = 不加入任何組別\n" +
-      "（輸入組別編號）";
+      "（輸入組別編號；同組重複輸入會移除）";
     const raw = prompt(menu, "1");
     if (raw === null) return;
 
@@ -1639,14 +1639,14 @@
       return;
     }
 
-    groups.forEach(function (g) {
-      g.memberIds = g.memberIds.filter(function (id) {
-        return id !== slotId;
-      });
-    });
-
     if (n === 0) {
+      groups.forEach(function (g) {
+        g.memberIds = g.memberIds.filter(function (id) {
+          return id !== slotId;
+        });
+      });
       saveGroups();
+      renderGroupButtons();
       alert(slotId + " 號已移出所有組別。");
       return;
     }
@@ -1654,10 +1654,17 @@
     const target = groups[n - 1];
     if (target.memberIds.indexOf(slotId) < 0) {
       target.memberIds.push(slotId);
+      saveGroups();
+      renderGroupButtons();
+      alert(slotId + " 號已加入「" + target.name + "」。");
+      return;
     }
+    target.memberIds = target.memberIds.filter(function (id) {
+      return id !== slotId;
+    });
     saveGroups();
     renderGroupButtons();
-    alert(slotId + " 號已加入「" + target.name + "」。");
+    alert(slotId + " 號已從「" + target.name + "」移除。");
   }
 
   function closeGroupQuickScoreMenu() {
