@@ -107,7 +107,7 @@
     hog: "小豬",
   };
 
-  const LUCKY_DRAW_MS = 5000;
+  const LUCKY_DRAW_MS = 3340;
   const LUCKY_DRAW_TICK_MS = 75;
 
   const gridEl = document.getElementById("dashboard-grid");
@@ -297,9 +297,12 @@
     (typeof window !== "undefined" && window.FREESOUND_API_KEY) || "";
 
   // 針對指定 Sound ID 的快取（避免每次重新打 Freesound）
-  const SOUND_ID_SCORE = 361603;
+  const SOUND_ID_SCORE = 241809;
+  const SOUND_ID_LUCKY = 139005;
   const SOUND_ID_TIMER = 81159;
   const freesoundIdUrlCache = {};
+  const freesoundIdAudioCache = {};
+  const freesoundIdFetchPromises = {};
 
   const FREESOUND_EFFECTS = {
     cheer: {
@@ -376,46 +379,89 @@
   async function fetchFreesoundPreviewUrlById(soundId) {
     if (!FREESOUND_TOKEN) return null;
     if (freesoundIdUrlCache[soundId]) return freesoundIdUrlCache[soundId];
-
-    try {
-      const params = new URLSearchParams({
-        token: FREESOUND_TOKEN,
-        fields: "id,name,previews",
-      });
-      const res = await fetch(
-        "https://freesound.org/apiv2/sounds/" + soundId + "/?" + params.toString()
-      );
-      if (!res.ok) throw new Error("Freesound sound HTTP " + res.status);
-      const data = await res.json();
-      const previews = data && data.previews;
-      const url =
-        previews &&
-        (previews["preview-hq-mp3"] || previews["preview-lq-mp3"] || null);
-      if (url) {
-        freesoundIdUrlCache[soundId] = url;
-        return url;
-      }
-      return null;
-    } catch (err) {
-      console.warn("[Freesound] 以 ID 取得預覽失敗:", soundId, err);
-      return null;
+    if (freesoundIdFetchPromises[soundId]) {
+      return freesoundIdFetchPromises[soundId];
     }
+
+    freesoundIdFetchPromises[soundId] = (async function () {
+      try {
+        const params = new URLSearchParams({
+          token: FREESOUND_TOKEN,
+          fields: "id,name,previews",
+        });
+        const res = await fetch(
+          "https://freesound.org/apiv2/sounds/" +
+            soundId +
+            "/?" +
+            params.toString()
+        );
+        if (!res.ok) throw new Error("Freesound sound HTTP " + res.status);
+        const data = await res.json();
+        const previews = data && data.previews;
+        const url =
+          previews &&
+          (previews["preview-hq-mp3"] || previews["preview-lq-mp3"] || null);
+        if (url) {
+          freesoundIdUrlCache[soundId] = url;
+          return url;
+        }
+        return null;
+      } catch (err) {
+        console.warn("[Freesound] 以 ID 取得預覽失敗:", soundId, err);
+        return null;
+      } finally {
+        delete freesoundIdFetchPromises[soundId];
+      }
+    })();
+
+    return freesoundIdFetchPromises[soundId];
+  }
+
+  async function ensureFreesoundAudioById(soundId, volume) {
+    if (!FREESOUND_TOKEN) return null;
+
+    const url = await fetchFreesoundPreviewUrlById(soundId);
+    if (!url) return null;
+
+    let audio = freesoundIdAudioCache[soundId];
+    if (!audio) {
+      audio = new Audio();
+      audio.preload = "auto";
+      freesoundIdAudioCache[soundId] = audio;
+    }
+
+    if (audio.src !== url) {
+      audio.src = url;
+      audio.load();
+    }
+
+    audio.volume = volume != null ? volume : 0.9;
+    return audio;
   }
 
   async function playFreesoundById(soundId, volume) {
-    if (!FREESOUND_TOKEN) return;
-    const url = freesoundIdUrlCache[soundId] ||
-      (await fetchFreesoundPreviewUrlById(soundId));
-    if (!url) return;
+    if (!FREESOUND_TOKEN) return false;
     try {
-      const audio = new Audio(url);
-      audio.preload = "auto";
-      audio.volume = volume != null ? volume : 0.9;
+      const audio = await ensureFreesoundAudioById(soundId, volume);
+      if (!audio) return false;
       audio.currentTime = 0;
       await audio.play();
+      return true;
     } catch (err) {
       console.warn("[Freesound] 以 ID 播放失敗:", soundId, err);
+      return false;
     }
+  }
+
+  function preloadFreesoundByIds() {
+    if (!FREESOUND_TOKEN) return;
+    [SOUND_ID_SCORE, SOUND_ID_LUCKY, SOUND_ID_TIMER].forEach(function (soundId) {
+      fetchFreesoundPreviewUrlById(soundId)
+        .then(function (url) {
+          if (url) return ensureFreesoundAudioById(soundId);
+        })
+        .catch(function () {});
+    });
   }
 
   async function searchFreesoundOnce(query, filter, sort) {
@@ -651,7 +697,9 @@
       return;
     }
 
-    playLuckyDrawPulse();
+    if (!FREESOUND_TOKEN) {
+      playLuckyDrawPulse();
+    }
     const progress = elapsed / LUCKY_DRAW_MS;
     const interval = Math.max(100, 500 - progress * 400);
 
@@ -660,7 +708,15 @@
     }, interval);
   }
 
-  /** 抽籤揭曉：響亮慶祝「叮！」 */
+  function playLuckyDrawSound() {
+    if (FREESOUND_TOKEN) {
+      void playFreesoundById(SOUND_ID_LUCKY, 0.9);
+      return;
+    }
+    playLuckyWinFanfare();
+  }
+
+  /** 抽籤揭曉：本地後備慶祝音 */
   function playLuckyWinFanfare() {
     const ctx = getWebAudioContext();
     if (!ctx) return;
@@ -762,6 +818,7 @@
 
   function preloadFreesoundEffects() {
     if (!FREESOUND_TOKEN) return;
+    preloadFreesoundByIds();
     preloadCheerSound();
     Object.keys(FREESOUND_EFFECTS).forEach(function (key) {
       if (key === "cheer") return;
@@ -1376,7 +1433,9 @@
 
     luckyDrawWinnerIds = pickUniqueWinnerIds(count);
     refreshAllSlotDrawClasses();
-    playLuckyWinFanfare();
+    if (!FREESOUND_TOKEN) {
+      playLuckyWinFanfare();
+    }
     showLuckyResultModal(luckyDrawWinnerIds);
 
     const btn = document.getElementById("btn-lucky-start");
@@ -1413,7 +1472,10 @@
     const startedAt = Date.now();
     setLuckyDrawFlash(pickRandomSlotId());
     stopLuckyDrawSuspense();
-    scheduleLuckyDrawSuspense(startedAt);
+    playLuckyDrawSound();
+    if (!FREESOUND_TOKEN) {
+      scheduleLuckyDrawSuspense(startedAt);
+    }
 
     if (luckyDrawTimerId !== null) {
       clearInterval(luckyDrawTimerId);
