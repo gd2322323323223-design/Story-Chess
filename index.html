@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>學生加分紀錄表</title>
-  <link rel="stylesheet" href="style.css?v=7" />
+  <link rel="stylesheet" href="style.css?v=8" />
   <script
     type="module"
     src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"
@@ -113,6 +113,15 @@
         <button type="button" id="btn-timer-start" class="tools-btn tools-btn--primary">▶ 開始</button>
         <button type="button" id="btn-timer-pause" class="tools-btn">⏸ 暫停</button>
         <button type="button" id="btn-timer-reset" class="tools-btn tools-btn--ghost">↺ 重設</button>
+        <button
+          type="button"
+          id="btn-timer-minute-cue"
+          class="tools-btn tools-btn--toggle is-on"
+          aria-pressed="true"
+          title="倒計時滿 5 分鐘起，每少 1 分鐘播放提示音"
+        >
+          🔔 分鐘提示
+        </button>
       </div>
     </section>
   </aside>
@@ -123,6 +132,52 @@
       <p id="score-toast-text" class="score-toast__text"></p>
       <span class="score-toast__spark" aria-hidden="true">✨</span>
     </div>
+  </div>
+
+  <div
+    id="bulk-pick-modal"
+    class="bulk-pick-modal"
+    hidden
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="bulk-pick-title"
+  >
+    <div class="bulk-pick-modal__card">
+      <h2 id="bulk-pick-title" class="bulk-pick-modal__title">批量揀選學生</h2>
+      <p class="bulk-pick-modal__hint">勾選要加分的學生，確認後可一次加分。</p>
+      <div class="bulk-pick-modal__toolbar">
+        <button type="button" id="btn-bulk-select-all" class="tools-btn tools-btn--ghost">全選</button>
+        <button type="button" id="btn-bulk-select-none" class="tools-btn tools-btn--ghost">清除</button>
+      </div>
+      <ul id="bulk-pick-list" class="bulk-pick-list"></ul>
+      <div class="bulk-pick-modal__actions">
+        <button type="button" id="btn-bulk-pick-confirm" class="tools-btn tools-btn--primary">確認揀選</button>
+        <button type="button" id="btn-bulk-pick-close" class="tools-btn tools-btn--ghost">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div
+    id="timer-alarm-modal"
+    class="timer-alarm-modal"
+    hidden
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="timer-alarm-title"
+  >
+    <div class="timer-alarm-modal__card">
+      <h2 id="timer-alarm-title" class="timer-alarm-modal__title">⏰ 時間到！</h2>
+      <p class="timer-alarm-modal__hint">倒計時已結束，請點下方按鈕關閉提示音。</p>
+      <button type="button" id="btn-timer-alarm-close" class="tools-btn tools-btn--primary">
+        關閉提示音
+      </button>
+    </div>
+  </div>
+
+  <div id="bulk-score-bar" class="bulk-score-bar" hidden aria-label="批量加分">
+    <span id="bulk-score-bar-label" class="bulk-score-bar__label">已揀選 0 人</span>
+    <div id="bulk-score-quick-btns" class="bulk-score-bar__btns"></div>
+    <button type="button" id="btn-bulk-pick-cancel" class="bulk-score-bar__cancel">取消揀選</button>
   </div>
 
   <div
@@ -177,6 +232,6 @@
   </div>
 
   <script src="freesound-config.js"></script>
-  <script src="script.js?v=7"></script>
+  <script src="script.js?v=8"></script>
 </body>
 </html>

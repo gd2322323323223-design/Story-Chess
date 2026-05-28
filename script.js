@@ -4,6 +4,7 @@
   const STORAGE_KEY = "classroom-dashboard-v1";
   const EMOJI_DAY_STORAGE_KEY = "classroom-dashboard-emoji-day-v1";
   const GROUPS_STORAGE_KEY = "classroom-dashboard-groups-v1";
+  const TIMER_MINUTE_CUE_STORAGE_KEY = "classroom-dashboard-timer-minute-cue-v1";
   const MAX_GROUPS = 10;
   const SLOT_COUNT = 22;
   const DEFAULT_NAME = "待命名";
@@ -134,6 +135,15 @@
   let countdownRemainingMs = 0;
   let countdownEndTs = 0;
   let timerAlarmPlayed = false;
+  let timerAlarmActive = false;
+  let timerAlarmAudio = null;
+  let timerAlarmIntervalId = null;
+  let countdownInitialMs = 0;
+  let countdownMinuteThresholds = [];
+  let countdownMinuteCuesPlayed = [];
+  let timerMinuteCueEnabled = true;
+  let bulkSelectedIds = [];
+  let bulkPickActive = false;
   let groups = [];
   let scoreToastTimeoutId = null;
   let groupPanelInitialized = false;
@@ -300,6 +310,7 @@
   const SOUND_ID_SCORE = 241809;
   const SOUND_ID_LUCKY = 139005;
   const SOUND_ID_TIMER = 81159;
+  const SOUND_ID_TIMER_MINUTE = 383602;
   const freesoundIdUrlCache = {};
   const freesoundIdAudioCache = {};
   const freesoundIdFetchPromises = {};
@@ -455,7 +466,12 @@
 
   function preloadFreesoundByIds() {
     if (!FREESOUND_TOKEN) return;
-    [SOUND_ID_SCORE, SOUND_ID_LUCKY, SOUND_ID_TIMER].forEach(function (soundId) {
+    [
+      SOUND_ID_SCORE,
+      SOUND_ID_LUCKY,
+      SOUND_ID_TIMER,
+      SOUND_ID_TIMER_MINUTE,
+    ].forEach(function (soundId) {
       fetchFreesoundPreviewUrlById(soundId)
         .then(function (url) {
           if (url) return ensureFreesoundAudioById(soundId);
@@ -774,12 +790,120 @@
     });
   }
 
-  function playTimerAlarm() {
+  function showTimerAlarmModal() {
+    const modal = document.getElementById("timer-alarm-modal");
+    if (modal) modal.hidden = false;
+    document.body.classList.add("timer-alarm-open");
+  }
+
+  function hideTimerAlarmModal() {
+    const modal = document.getElementById("timer-alarm-modal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("timer-alarm-open");
+  }
+
+  function stopTimerAlarmLoop() {
+    timerAlarmActive = false;
+    hideTimerAlarmModal();
+    if (timerAlarmAudio) {
+      timerAlarmAudio.loop = false;
+      timerAlarmAudio.pause();
+      timerAlarmAudio.currentTime = 0;
+      timerAlarmAudio = null;
+    }
+    if (timerAlarmIntervalId !== null) {
+      clearInterval(timerAlarmIntervalId);
+      timerAlarmIntervalId = null;
+    }
+  }
+
+  async function startTimerAlarmLoop() {
+    if (timerAlarmActive) return;
+    timerAlarmActive = true;
+    showTimerAlarmModal();
+
     if (FREESOUND_TOKEN) {
-      void playFreesoundById(SOUND_ID_TIMER, 0.9);
+      try {
+        const audio = await ensureFreesoundAudioById(SOUND_ID_TIMER, 0.9);
+        if (audio) {
+          timerAlarmAudio = audio;
+          audio.loop = true;
+          audio.currentTime = 0;
+          await audio.play();
+          return;
+        }
+      } catch (err) {
+        console.warn("[Freesound] 倒計時循環音效失敗:", err);
+      }
+    }
+
+    playTimerAlarmFallback();
+    timerAlarmIntervalId = setInterval(playTimerAlarmFallback, 1400);
+  }
+
+  function playTimerMinuteCue() {
+    if (!timerMinuteCueEnabled) return;
+    if (FREESOUND_TOKEN) {
+      void playFreesoundById(SOUND_ID_TIMER_MINUTE, 0.85);
       return;
     }
-    playTimerAlarmFallback();
+    playScoreDingFallback();
+  }
+
+  function loadTimerMinuteCueSetting() {
+    try {
+      const raw = localStorage.getItem(TIMER_MINUTE_CUE_STORAGE_KEY);
+      if (raw === "0") timerMinuteCueEnabled = false;
+      else if (raw === "1") timerMinuteCueEnabled = true;
+    } catch (e) {
+      timerMinuteCueEnabled = true;
+    }
+  }
+
+  function saveTimerMinuteCueSetting() {
+    localStorage.setItem(
+      TIMER_MINUTE_CUE_STORAGE_KEY,
+      timerMinuteCueEnabled ? "1" : "0"
+    );
+  }
+
+  function updateTimerMinuteCueButtonUI() {
+    const btn = document.getElementById("btn-timer-minute-cue");
+    if (!btn) return;
+    btn.hidden = timerMode !== "countdown";
+    btn.classList.toggle("is-on", timerMinuteCueEnabled);
+    btn.setAttribute("aria-pressed", timerMinuteCueEnabled ? "true" : "false");
+    btn.textContent = timerMinuteCueEnabled
+      ? "🔔 分鐘提示：開"
+      : "🔕 分鐘提示：關";
+  }
+
+  function setupCountdownMinuteCues(initialMs) {
+    countdownInitialMs = initialMs;
+    countdownMinuteCuesPlayed = [];
+    countdownMinuteThresholds = [];
+    if (
+      timerMinuteCueEnabled &&
+      timerMode === "countdown" &&
+      initialMs >= 5 * 60 * 1000
+    ) {
+      countdownMinuteThresholds = [240000, 180000, 120000, 60000];
+    }
+  }
+
+  function checkCountdownMinuteCues(ms) {
+    if (!timerRunning || timerMode !== "countdown") return;
+    if (!countdownMinuteThresholds.length) return;
+
+    countdownMinuteThresholds.forEach(function (threshold) {
+      if (
+        ms <= threshold &&
+        countdownMinuteCuesPlayed.indexOf(threshold) < 0
+      ) {
+        countdownMinuteCuesPlayed.push(threshold);
+        playTimerMinuteCue();
+      }
+    });
   }
 
   async function playFreesoundEffect(effectKey) {
@@ -972,6 +1096,251 @@
     }, 2200);
   }
 
+  function slotDisplayLabel(slot) {
+    const name =
+      slot.name && slot.name !== DEFAULT_NAME ? slot.name : "待命名";
+    return slot.id + "號 · " + name;
+  }
+
+  function updateBulkPickUI() {
+    const countEl = document.getElementById("bulk-pick-count");
+    const bar = document.getElementById("bulk-score-bar");
+    const label = document.getElementById("bulk-score-bar-label");
+    const count = bulkSelectedIds.length;
+
+    if (countEl) {
+      if (bulkPickActive && count > 0) {
+        countEl.hidden = false;
+        countEl.textContent = "已揀 " + count + " 人";
+      } else {
+        countEl.hidden = true;
+      }
+    }
+
+    if (bar) bar.hidden = !bulkPickActive || count === 0;
+    if (label && bulkPickActive) {
+      label.textContent = "已揀選 " + count + " 人，請選擇加分";
+    }
+
+    document.body.classList.toggle("bulk-pick-active", bulkPickActive);
+    slots.forEach(renderSlotElement);
+  }
+
+  function openBulkPickModal() {
+    const modal = document.getElementById("bulk-pick-modal");
+    const list = document.getElementById("bulk-pick-list");
+    if (!modal || !list) return;
+
+    list.innerHTML = "";
+    slots.forEach(function (slot) {
+      const li = document.createElement("li");
+      li.className = "bulk-pick-item";
+      const checked = bulkSelectedIds.indexOf(slot.id) >= 0;
+      li.innerHTML =
+        '<input type="checkbox" class="bulk-pick-item__check" data-slot-id="' +
+        slot.id +
+        '"' +
+        (checked ? " checked" : "") +
+        " />" +
+        "<span>" +
+        slotDisplayLabel(slot) +
+        "</span>";
+      const input = li.querySelector(".bulk-pick-item__check");
+      li.addEventListener("click", function (ev) {
+        if (ev.target === input) return;
+        input.checked = !input.checked;
+      });
+      list.appendChild(li);
+    });
+
+    modal.hidden = false;
+    document.body.classList.add("bulk-pick-modal-open");
+  }
+
+  function closeBulkPickModal() {
+    const modal = document.getElementById("bulk-pick-modal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("bulk-pick-modal-open");
+  }
+
+  function getBulkPickModalSelectedIds() {
+    const list = document.getElementById("bulk-pick-list");
+    if (!list) return [];
+    const ids = [];
+    list.querySelectorAll(".bulk-pick-item__check:checked").forEach(function (el) {
+      const id = parseInt(el.getAttribute("data-slot-id"), 10);
+      if (!Number.isNaN(id)) ids.push(id);
+    });
+    return ids;
+  }
+
+  function confirmBulkPick() {
+    bulkSelectedIds = getBulkPickModalSelectedIds();
+    if (!bulkSelectedIds.length) {
+      alert("請至少揀選一位學生。");
+      return;
+    }
+    bulkPickActive = true;
+    closeBulkPickModal();
+    closeAllQuickScoreMenus();
+    updateBulkPickUI();
+  }
+
+  function cancelBulkPick() {
+    bulkPickActive = false;
+    bulkSelectedIds = [];
+    closeBulkPickModal();
+    updateBulkPickUI();
+  }
+
+  function toggleBulkSlot(slotId) {
+    if (!bulkPickActive) return;
+    const idx = bulkSelectedIds.indexOf(slotId);
+    if (idx >= 0) {
+      bulkSelectedIds.splice(idx, 1);
+    } else {
+      bulkSelectedIds.push(slotId);
+    }
+    if (!bulkSelectedIds.length) {
+      bulkPickActive = false;
+    }
+    updateBulkPickUI();
+  }
+
+  function showBulkScoreToast(count, delta) {
+    const toast = document.getElementById("score-toast");
+    const textEl = document.getElementById("score-toast-text");
+    if (!toast || !textEl) return;
+
+    textEl.textContent =
+      "已為 " + count + " 位學生各加" + formatScoreDelta(delta) + "！";
+
+    if (scoreToastTimeoutId !== null) {
+      clearTimeout(scoreToastTimeoutId);
+    }
+    toast.hidden = false;
+    const card = toast.querySelector(".score-toast__card");
+    if (card) {
+      card.style.animation = "none";
+      void card.offsetWidth;
+      card.style.animation = "";
+    }
+    scoreToastTimeoutId = setTimeout(function () {
+      toast.hidden = true;
+      scoreToastTimeoutId = null;
+    }, 2200);
+  }
+
+  function applyBulkQuickScore(delta) {
+    if (!bulkSelectedIds.length || !delta) return;
+
+    bulkSelectedIds.forEach(function (id) {
+      const s = getSlotById(id);
+      if (s) s.score = clampScore(s.score + delta);
+    });
+    saveSlots();
+    renderAll();
+    playScoreDing();
+    showBulkScoreToast(bulkSelectedIds.length, delta);
+  }
+
+  function onBulkScoreAction(defaultDelta) {
+    if (!bulkSelectedIds.length) {
+      cancelBulkPick();
+      return;
+    }
+
+    if (teacherMode) {
+      const raw = prompt(
+        "為已揀選的 " +
+          bulkSelectedIds.length +
+          " 位學生，每人加幾分？（可輸入正負整數，0 取消）",
+        String(defaultDelta)
+      );
+      if (raw === null) return;
+      const delta = parseInt(raw, 10);
+      if (!Number.isFinite(delta) || delta === 0) {
+        if (raw !== "0") alert("請輸入非 0 的整數。");
+        return;
+      }
+      applyBulkQuickScore(delta);
+      return;
+    }
+
+    applyBulkQuickScore(defaultDelta);
+  }
+
+  function initBulkPickUI() {
+    const btnOpen = document.getElementById("btn-bulk-pick");
+    if (btnOpen) {
+      btnOpen.addEventListener("click", function () {
+        openBulkPickModal();
+      });
+    }
+
+    const btnAll = document.getElementById("btn-bulk-select-all");
+    if (btnAll) {
+      btnAll.addEventListener("click", function () {
+        document
+          .querySelectorAll(".bulk-pick-item__check")
+          .forEach(function (el) {
+            el.checked = true;
+          });
+      });
+    }
+
+    const btnNone = document.getElementById("btn-bulk-select-none");
+    if (btnNone) {
+      btnNone.addEventListener("click", function () {
+        document
+          .querySelectorAll(".bulk-pick-item__check")
+          .forEach(function (el) {
+            el.checked = false;
+          });
+      });
+    }
+
+    const btnConfirm = document.getElementById("btn-bulk-pick-confirm");
+    if (btnConfirm) btnConfirm.addEventListener("click", confirmBulkPick);
+
+    const btnClose = document.getElementById("btn-bulk-pick-close");
+    if (btnClose) btnClose.addEventListener("click", closeBulkPickModal);
+
+    const btnCancel = document.getElementById("btn-bulk-pick-cancel");
+    if (btnCancel) btnCancel.addEventListener("click", cancelBulkPick);
+
+    const modal = document.getElementById("bulk-pick-modal");
+    if (modal) {
+      modal.addEventListener("click", function (ev) {
+        if (ev.target === modal) closeBulkPickModal();
+      });
+    }
+
+    const quickWrap = document.getElementById("bulk-score-quick-btns");
+    if (quickWrap) {
+      quickWrap.innerHTML = "";
+      QUICK_ADD_VALUES.forEach(function (delta) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "score-quick-btn";
+        btn.textContent = "+" + delta;
+        btn.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          onBulkScoreAction(delta);
+        });
+        quickWrap.appendChild(btn);
+      });
+    }
+
+    const btnAlarmClose = document.getElementById("btn-timer-alarm-close");
+    if (btnAlarmClose) {
+      btnAlarmClose.addEventListener("click", function () {
+        stopTimerAlarmLoop();
+        timerAlarmPlayed = true;
+      });
+    }
+  }
+
   function ensureGroupPanel() {
     if (!gridEl || groupPanelInitialized) return;
 
@@ -980,6 +1349,10 @@
     panel.className = "group-score-panel";
     panel.setAttribute("aria-label", "組別加分");
     panel.innerHTML =
+      '<div class="group-score-panel__bulk">' +
+      '<button type="button" id="btn-bulk-pick" class="group-score-panel__bulk-btn" title="自由揀選學生批量加分">☑ 批量揀選</button>' +
+      '<span id="bulk-pick-count" class="group-score-panel__bulk-count" hidden></span>' +
+      "</div>" +
       '<div class="group-score-panel__head">' +
       '<span class="group-score-panel__label">組別加分</span>' +
       '<button type="button" id="btn-group-manage" class="group-score-panel__manage" title="管理組別">⚙ 管理</button>' +
@@ -987,6 +1360,7 @@
       '<div id="group-buttons" class="group-score-panel__buttons"></div>';
 
     gridEl.appendChild(panel);
+    initBulkPickUI();
 
     document.getElementById("btn-group-manage").addEventListener("click", function () {
       if (!teacherMode && !ensureTeacherModeOn()) return;
@@ -1541,6 +1915,8 @@
     const urgent = timerRunning && ms > 0 && ms <= 10000;
     display.classList.toggle("is-urgent", urgent);
 
+    checkCountdownMinuteCues(ms);
+
     if (timerRunning && ms <= 0 && !timerAlarmPlayed) {
       timerAlarmPlayed = true;
       timerRunning = false;
@@ -1551,7 +1927,7 @@
       countdownRemainingMs = 0;
       display.textContent = "00:00";
       display.classList.remove("is-urgent");
-      playTimerAlarm();
+      void startTimerAlarmLoop();
     }
   }
 
@@ -1571,6 +1947,7 @@
   function timerStart() {
     getWebAudioContext();
     timerAlarmPlayed = false;
+    stopTimerAlarmLoop();
 
     if (timerMode === "stopwatch") {
       if (!timerRunning) {
@@ -1588,6 +1965,7 @@
       if (countdownRemainingMs <= 0) {
         countdownRemainingMs = 1000;
       }
+      setupCountdownMinuteCues(countdownRemainingMs);
       countdownEndTs = Date.now() + countdownRemainingMs;
       timerRunning = true;
       startTimerLoop();
@@ -1610,7 +1988,10 @@
   function timerReset() {
     timerRunning = false;
     timerAlarmPlayed = false;
+    stopTimerAlarmLoop();
     stopTimerLoop();
+    countdownMinuteThresholds = [];
+    countdownMinuteCuesPlayed = [];
 
     if (timerMode === "stopwatch") {
       stopwatchElapsedMs = 0;
@@ -1626,7 +2007,11 @@
     timerMode = mode;
     timerRunning = false;
     timerAlarmPlayed = false;
+    stopTimerAlarmLoop();
     stopTimerLoop();
+    countdownMinuteThresholds = [];
+    countdownMinuteCuesPlayed = [];
+    updateTimerMinuteCueButtonUI();
 
     document.querySelectorAll(".timer-mode-tab").forEach(function (tab) {
       const active = tab.dataset.timerMode === mode;
@@ -1723,6 +2108,15 @@
     if (timerPauseBtn) timerPauseBtn.addEventListener("click", timerPause);
     if (timerResetBtn) timerResetBtn.addEventListener("click", timerReset);
 
+    const minuteCueBtn = document.getElementById("btn-timer-minute-cue");
+    if (minuteCueBtn) {
+      minuteCueBtn.addEventListener("click", function () {
+        timerMinuteCueEnabled = !timerMinuteCueEnabled;
+        saveTimerMinuteCueSetting();
+        updateTimerMinuteCueButtonUI();
+      });
+    }
+
     ["timer-min", "timer-sec"].forEach(function (id) {
       const el = document.getElementById(id);
       if (el) {
@@ -1735,6 +2129,8 @@
       }
     });
 
+    loadTimerMinuteCueSetting();
+    updateTimerMinuteCueButtonUI();
     setTimerMode("stopwatch");
   }
 
@@ -1857,6 +2253,10 @@
     }
 
     applySlotDrawClasses(el, slot.id);
+    el.classList.toggle(
+      "slot--bulk-selected",
+      bulkPickActive && bulkSelectedIds.indexOf(slot.id) >= 0
+    );
   }
 
   function renderAll() {
@@ -2103,6 +2503,11 @@
   function onSlotClick(slotId) {
     const slot = getSlotById(slotId);
     if (!slot) return;
+
+    if (bulkPickActive) {
+      toggleBulkSlot(slotId);
+      return;
+    }
 
     if (teacherMode) {
       closeQuickScoreMenu();
