@@ -1362,18 +1362,6 @@
     document.addEventListener(
       "click",
       function (ev) {
-        const deltaBtn = ev.target.closest("[data-bulk-delta]");
-        if (deltaBtn) {
-          if (!bulkPickActive || !bulkSelectedIds.length) return;
-          ev.preventDefault();
-          ev.stopPropagation();
-          const delta = parseInt(deltaBtn.getAttribute("data-bulk-delta"), 10);
-          if (!Number.isNaN(delta)) {
-            onBulkScoreAction(delta);
-          }
-          return;
-        }
-
         if (ev.target.closest("#btn-bulk-pick")) {
           ev.stopPropagation();
           openBulkPickModal();
