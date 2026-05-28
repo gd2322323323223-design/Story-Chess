@@ -598,6 +598,24 @@ body.lucky-draw-running .slot {
   box-shadow: 0 0 12px rgba(94, 234, 212, 0.35);
 }
 
+.build-version-badge {
+  position: fixed;
+  top: 0.65rem;
+  right: 0.85rem;
+  z-index: 230;
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(12, 18, 30, 0.72);
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
+  user-select: none;
+}
+
 body.teacher-mode-active .slot {
   outline: 1px dashed rgba(94, 234, 212, 0.35);
   outline-offset: 2px;
