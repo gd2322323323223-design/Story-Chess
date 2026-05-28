@@ -147,7 +147,6 @@
   let groups = [];
   let scoreToastTimeoutId = null;
   let groupPanelInitialized = false;
-  let bulkPickUiInitialized = false;
 
   function animalForSlot(id) {
     return ANIMALS[(id - 1) % ANIMALS.length];
@@ -1106,24 +1105,24 @@
   function updateBulkPickUI() {
     normalizeBulkSelectedIds();
     ensureBulkScoreButtons();
-    const countEl = document.getElementById("bulk-pick-count");
-    const bar = document.getElementById("bulk-score-bar");
-    const label = document.getElementById("bulk-score-bar-label");
     const count = bulkSelectedIds.length;
+    const showBulkScore = bulkPickActive && count > 0;
 
+    const countEl = document.getElementById("bulk-pick-count");
     if (countEl) {
-      if (bulkPickActive && count > 0) {
-        countEl.hidden = false;
-        countEl.textContent = "已揀 " + count + " 人";
-      } else {
-        countEl.hidden = true;
-      }
+      countEl.hidden = !showBulkScore;
+      countEl.textContent = showBulkScore ? "已揀 " + count + " 人" : "";
     }
 
-    if (bar) bar.hidden = !bulkPickActive || count === 0;
-    if (label && bulkPickActive) {
-      label.textContent = "已揀選 " + count + " 人，請選擇加分";
+    const inline = document.getElementById("bulk-score-inline");
+    const inlineLabel = document.getElementById("bulk-score-inline-label");
+    if (inline) inline.hidden = !showBulkScore;
+    if (inlineLabel && showBulkScore) {
+      inlineLabel.textContent = "已揀選 " + count + " 人，點擊加分：";
     }
+
+    const bar = document.getElementById("bulk-score-bar");
+    if (bar) bar.hidden = true;
 
     document.body.classList.toggle("bulk-pick-active", bulkPickActive);
     slots.forEach(renderSlotElement);
@@ -1235,29 +1234,40 @@
   }
 
   function normalizeBulkSelectedIds() {
+    const seen = {};
     bulkSelectedIds = bulkSelectedIds
       .map(function (id) {
         return parseInt(id, 10);
       })
       .filter(function (id) {
-        return !Number.isNaN(id) && id >= 1 && id <= SLOT_COUNT;
+        if (Number.isNaN(id) || id < 1 || id > SLOT_COUNT || seen[id]) {
+          return false;
+        }
+        seen[id] = true;
+        return true;
       });
   }
 
-  function ensureBulkScoreButtons() {
-    const quickWrap = document.getElementById("bulk-score-quick-btns");
-    if (!quickWrap) return;
-    if (quickWrap.querySelector("[data-bulk-delta]")) return;
-
-    quickWrap.innerHTML = "";
+  function fillBulkScoreButtonContainer(container) {
+    if (!container) return;
+    container.innerHTML = "";
     QUICK_ADD_VALUES.forEach(function (delta) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "bulk-score-quick-btn";
       btn.textContent = "+" + delta;
       btn.setAttribute("data-bulk-delta", String(delta));
-      quickWrap.appendChild(btn);
+      container.appendChild(btn);
     });
+  }
+
+  function ensureBulkScoreButtons() {
+    fillBulkScoreButtonContainer(
+      document.getElementById("bulk-score-inline-btns")
+    );
+    fillBulkScoreButtonContainer(
+      document.getElementById("bulk-score-quick-btns")
+    );
   }
 
   function applyBulkQuickScore(delta) {
@@ -1285,100 +1295,73 @@
     showBulkScoreToast(applied, delta);
   }
 
-  function onBulkScoreAction(defaultDelta) {
-    if (!bulkSelectedIds.length) {
-      cancelBulkPick();
-      return;
-    }
+  function setupBulkPickDelegation() {
+    if (setupBulkPickDelegation.done) return;
+    setupBulkPickDelegation.done = true;
 
-    if (teacherMode) {
-      const raw = prompt(
-        "為已揀選的 " +
-          bulkSelectedIds.length +
-          " 位學生，每人加幾分？（可輸入正負整數，0 取消）",
-        String(defaultDelta)
-      );
-      if (raw === null) return;
-      const delta = parseInt(raw, 10);
-      if (!Number.isFinite(delta) || delta === 0) {
-        if (raw !== "0") alert("請輸入非 0 的整數。");
-        return;
-      }
-      applyBulkQuickScore(delta);
-      return;
-    }
-
-    applyBulkQuickScore(defaultDelta);
-  }
-
-  function initBulkPickUI() {
-    if (bulkPickUiInitialized) {
-      ensureBulkScoreButtons();
-      return;
-    }
-    bulkPickUiInitialized = true;
-
-    ensureBulkScoreButtons();
-
-    const bar = document.getElementById("bulk-score-bar");
-    if (bar) {
-      bar.addEventListener("click", function (ev) {
-        const btn = ev.target.closest("[data-bulk-delta]");
-        if (!btn || !bar.contains(btn)) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-        const delta = parseInt(btn.getAttribute("data-bulk-delta"), 10);
-        if (!Number.isNaN(delta)) {
-          onBulkScoreAction(delta);
+    document.addEventListener(
+      "click",
+      function (ev) {
+        const deltaBtn = ev.target.closest("[data-bulk-delta]");
+        if (deltaBtn) {
+          if (!bulkPickActive || !bulkSelectedIds.length) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          const delta = parseInt(deltaBtn.getAttribute("data-bulk-delta"), 10);
+          if (!Number.isNaN(delta)) {
+            applyBulkQuickScore(delta);
+          }
+          return;
         }
-      });
-    }
 
-    const btnOpen = document.getElementById("btn-bulk-pick");
-    if (btnOpen) {
-      btnOpen.addEventListener("click", function (ev) {
-        ev.stopPropagation();
-        openBulkPickModal();
-      });
-    }
+        if (ev.target.closest("#btn-bulk-pick")) {
+          ev.stopPropagation();
+          openBulkPickModal();
+          return;
+        }
 
-    const btnAll = document.getElementById("btn-bulk-select-all");
-    if (btnAll) {
-      btnAll.addEventListener("click", function () {
-        document
-          .querySelectorAll(".bulk-pick-item__check")
-          .forEach(function (el) {
-            el.checked = true;
-          });
-      });
-    }
+        if (ev.target.closest("#btn-bulk-pick-confirm")) {
+          ev.preventDefault();
+          confirmBulkPick();
+          return;
+        }
 
-    const btnNone = document.getElementById("btn-bulk-select-none");
-    if (btnNone) {
-      btnNone.addEventListener("click", function () {
-        document
-          .querySelectorAll(".bulk-pick-item__check")
-          .forEach(function (el) {
-            el.checked = false;
-          });
-      });
-    }
+        if (ev.target.closest("#btn-bulk-pick-close")) {
+          closeBulkPickModal();
+          return;
+        }
 
-    const btnConfirm = document.getElementById("btn-bulk-pick-confirm");
-    if (btnConfirm) btnConfirm.addEventListener("click", confirmBulkPick);
+        if (ev.target.closest("#btn-bulk-pick-cancel")) {
+          ev.preventDefault();
+          cancelBulkPick();
+          return;
+        }
 
-    const btnClose = document.getElementById("btn-bulk-pick-close");
-    if (btnClose) btnClose.addEventListener("click", closeBulkPickModal);
+        if (ev.target.closest("#btn-bulk-select-all")) {
+          document
+            .querySelectorAll(".bulk-pick-item__check")
+            .forEach(function (el) {
+              el.checked = true;
+            });
+          return;
+        }
 
-    const btnCancel = document.getElementById("btn-bulk-pick-cancel");
-    if (btnCancel) btnCancel.addEventListener("click", cancelBulkPick);
+        if (ev.target.closest("#btn-bulk-select-none")) {
+          document
+            .querySelectorAll(".bulk-pick-item__check")
+            .forEach(function (el) {
+              el.checked = false;
+            });
+          return;
+        }
 
-    const modal = document.getElementById("bulk-pick-modal");
-    if (modal) {
-      modal.addEventListener("click", function (ev) {
-        if (ev.target === modal) closeBulkPickModal();
-      });
-    }
+        const bulkModal = document.getElementById("bulk-pick-modal");
+        if (bulkModal && ev.target === bulkModal) {
+          closeBulkPickModal();
+        }
+      },
+      true
+    );
 
     const btnAlarmClose = document.getElementById("btn-timer-alarm-close");
     if (btnAlarmClose) {
@@ -1401,6 +1384,11 @@
       '<button type="button" id="btn-bulk-pick" class="group-score-panel__bulk-btn" title="自由揀選學生批量加分">☑ 批量揀選</button>' +
       '<span id="bulk-pick-count" class="group-score-panel__bulk-count" hidden></span>' +
       "</div>" +
+      '<div id="bulk-score-inline" class="group-score-panel__bulk-score" hidden>' +
+      '<p id="bulk-score-inline-label" class="group-score-panel__bulk-score-label">已揀選 0 人</p>' +
+      '<div id="bulk-score-inline-btns" class="group-score-panel__bulk-btns"></div>' +
+      '<button type="button" id="btn-bulk-pick-cancel" class="group-score-panel__bulk-cancel">取消揀選</button>' +
+      "</div>" +
       '<div class="group-score-panel__head">' +
       '<span class="group-score-panel__label">組別加分</span>' +
       '<button type="button" id="btn-group-manage" class="group-score-panel__manage" title="管理組別">⚙ 管理</button>' +
@@ -1408,7 +1396,7 @@
       '<div id="group-buttons" class="group-score-panel__buttons"></div>';
 
     gridEl.appendChild(panel);
-    initBulkPickUI();
+    ensureBulkScoreButtons();
 
     document.getElementById("btn-group-manage").addEventListener("click", function () {
       if (!teacherMode && !ensureTeacherModeOn()) return;
@@ -2652,9 +2640,9 @@
       }
     });
 
-    initBulkPickUI();
     renderAll();
     ensureGroupPanel();
+    setupBulkPickDelegation();
     renderGroupButtons();
     startAnimationCycle();
   }

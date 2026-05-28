@@ -864,6 +864,47 @@ body.teacher-mode-active .slot {
   white-space: nowrap;
 }
 
+.group-score-panel__bulk-score {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 10px;
+  background: rgba(255, 251, 235, 0.95);
+  border: 1.5px solid rgba(212, 175, 55, 0.55);
+}
+
+.group-score-panel__bulk-score[hidden] {
+  display: none;
+}
+
+.group-score-panel__bulk-score-label {
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: #78350f;
+  text-align: center;
+  margin: 0;
+}
+
+.group-score-panel__bulk-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  justify-content: center;
+}
+
+.group-score-panel__bulk-cancel {
+  width: 100%;
+  padding: 0.28rem;
+  border-radius: 8px;
+  border: 1px solid rgba(120, 53, 15, 0.3);
+  background: rgba(255, 255, 255, 0.85);
+  color: #78350f;
+  font-size: 0.7rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .group-score-panel__manage {
   padding: 0.2rem 0.5rem;
   border-radius: 8px;
