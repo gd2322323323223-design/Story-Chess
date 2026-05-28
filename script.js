@@ -146,6 +146,8 @@
   let timerMinuteCueEnabled = true;
   let bulkSelectedIds = [];
   let bulkPickActive = false;
+  let bulkSuccessIds = [];
+  let bulkSuccessTimerId = null;
   let groups = [];
   let scoreToastTimeoutId = null;
   let groupPanelInitialized = false;
@@ -1321,6 +1323,20 @@
     }
 
     saveSlots();
+    bulkSuccessIds = bulkSelectedIds.slice();
+    if (bulkSuccessTimerId !== null) {
+      clearTimeout(bulkSuccessTimerId);
+    }
+    bulkSuccessTimerId = setTimeout(function () {
+      const ids = bulkSuccessIds.slice();
+      bulkSuccessIds = [];
+      ids.forEach(function (id) {
+        const slot = getSlotById(id);
+        if (slot) renderSlotElement(slot);
+      });
+      bulkSuccessTimerId = null;
+    }, 850);
+
     bulkSelectedIds.forEach(function (id) {
       const slot = getSlotById(id);
       if (slot) renderSlotElement(slot);
@@ -2339,6 +2355,7 @@
       "slot--bulk-selected",
       bulkPickActive && bulkSelectedIds.indexOf(slot.id) >= 0
     );
+    el.classList.toggle("slot--bulk-success", bulkSuccessIds.indexOf(slot.id) >= 0);
   }
 
   function renderAll() {
@@ -2457,11 +2474,6 @@
   function onScoreClick(slotId) {
     const slot = getSlotById(slotId);
     if (!slot) return;
-
-    if (bulkPickActive) {
-      toggleBulkSlot(slotId);
-      return;
-    }
 
     if (teacherMode) {
       closeQuickScoreMenu();
