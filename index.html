@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>學生加分紀錄表</title>
-  <link rel="stylesheet" href="style.css?v=50" />
+  <link rel="stylesheet" href="style.css?v=55" />
   <script
     type="module"
     src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"
@@ -44,7 +44,42 @@
     </div>
   </div>
 
-  <div class="build-version-badge" aria-label="版本號">v51</div>
+  <div class="build-version-badge" aria-label="版本號">v55</div>
+
+  <div
+    id="class-code-modal"
+    class="class-code-modal"
+    hidden
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="class-code-title"
+  >
+    <div class="class-code-modal__card">
+      <h2 id="class-code-title" class="class-code-modal__title">☁️ 連接班級雲端</h2>
+      <p class="class-code-modal__hint">
+        請輸入班級代碼（例如：<code>1b</code>、<code>3a</code>）。不同代碼的資料在雲端完全獨立。
+      </p>
+      <label class="class-code-modal__field" for="class-code-input">
+        <span class="visually-hidden">班級代碼</span>
+        <input
+          id="class-code-input"
+          class="class-code-modal__input"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="1b"
+          maxlength="32"
+        />
+      </label>
+      <p id="class-code-error" class="class-code-modal__error" hidden></p>
+      <div class="class-code-modal__actions">
+        <button type="button" id="btn-class-code-submit" class="tools-btn tools-btn--primary">
+          確認進入
+        </button>
+      </div>
+      <p id="class-code-sync-hint" class="class-code-modal__sync">正在連接 Firebase 雲端…</p>
+    </div>
+  </div>
 
   <button
     type="button"
@@ -202,6 +237,40 @@
         >
           ♻️ 還原全班資料
         </button>
+      </div>
+    </section>
+
+    <section class="tools-panel tools-panel--class-code tools-panel--collapsible" aria-labelledby="tools-class-code-title">
+      <button
+        type="button"
+        id="btn-class-code-panel-toggle"
+        class="tools-panel__toggle"
+        aria-expanded="false"
+        aria-controls="class-code-panel-body"
+      >
+        <span id="tools-class-code-title" class="tools-panel__title">☁️ 班級雲端代碼</span>
+        <span class="tools-panel__chevron" aria-hidden="true">▼</span>
+      </button>
+      <div id="class-code-panel-body" class="tools-panel__collapsible-body" hidden>
+        <p class="tools-panel__desc">每位老師使用不同代碼，資料互不干擾。</p>
+        <label class="tools-field" for="class-code-sidebar-input">
+          <span>目前班級</span>
+          <input
+            id="class-code-sidebar-input"
+            class="tools-input"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="1b"
+            maxlength="32"
+          />
+        </label>
+        <div class="tools-panel__actions">
+          <button type="button" id="btn-class-code-switch" class="tools-btn tools-btn--primary">
+            切換班級
+          </button>
+        </div>
+        <p id="class-code-sync-status" class="class-code-sync-status">雲端：尚未連線</p>
       </div>
     </section>
   </aside>
@@ -489,26 +558,37 @@
         >
           ✕
         </button>
-        <div class="mission-reminder-hud__label-row">
-          <p class="mission-reminder-hud__label">🌟 今日任務</p>
-          <button
-            type="button"
-            id="btn-mission-pick"
-            class="mission-reminder-hud__pick-btn"
-            hidden
-          >
-            揀選任務
-          </button>
-        </div>
-        <h3 id="mission-reminder-title" class="mission-reminder-hud__title"></h3>
-        <div id="mission-reminder-desc" class="mission-reminder-hud__desc"></div>
         <button
           type="button"
-          id="btn-mission-goal-achieved"
-          class="mission-reminder-hud__goal-btn"
+          id="btn-mission-reminder-toggle"
+          class="mission-reminder-hud__toggle"
+          aria-expanded="false"
+          aria-controls="mission-reminder-body"
         >
-          達成目標！
+          <span class="mission-reminder-hud__label">🌟 今日任務</span>
+          <span id="mission-reminder-title" class="mission-reminder-hud__title"></span>
+          <span class="mission-reminder-hud__chevron" aria-hidden="true">▼</span>
         </button>
+        <div id="mission-reminder-body" class="mission-reminder-hud__body" hidden>
+          <div id="mission-reminder-desc" class="mission-reminder-hud__desc"></div>
+          <div class="mission-reminder-hud__actions">
+            <button
+              type="button"
+              id="btn-mission-pick"
+              class="mission-reminder-hud__pick-btn"
+              hidden
+            >
+              揀選任務
+            </button>
+            <button
+              type="button"
+              id="btn-mission-goal-achieved"
+              class="mission-reminder-hud__goal-btn"
+            >
+              達成目標！
+            </button>
+          </div>
+        </div>
       </aside>
 
       <div id="mission-score-hud" class="mission-score-hud" hidden aria-live="polite">
@@ -585,7 +665,10 @@
     <main id="dashboard-grid" class="dashboard-grid" aria-label="全班神獸插槽"></main>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="firebase-config.js"></script>
   <script src="freesound-config.js"></script>
-  <script src="script.js?v=51"></script>
+  <script src="script.js?v=55"></script>
 </body>
 </html>

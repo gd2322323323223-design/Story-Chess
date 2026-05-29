@@ -146,6 +146,18 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="firebase-config.js"></script>
+  <script>
+    (function () {
+      var cfg = window.FIREBASE_CONFIG;
+      if (typeof firebase !== "undefined" && cfg && cfg.apiKey && cfg.databaseURL) {
+        if (!firebase.apps.length) firebase.initializeApp(cfg);
+        window.__firebaseDb = firebase.database();
+      }
+    })();
+  </script>
   <script src="pet.js"></script>
 </body>
 </html>

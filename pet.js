@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const DASHBOARD_STORAGE = "classroom-dashboard-v1";
+  const CLASS_CODE_STORAGE_KEY = "classroom-class-code-v1";
   const SLOT_COUNT = 22;
 
   function getSlotIdFromUrl() {
@@ -16,28 +16,44 @@
     return;
   }
 
-  function getDashboardSlot() {
+  let dashSlot = null;
+  let animalName = "crab";
+  let modelSrc = "models/animal-crab.glb";
+
+  function readClassCode() {
     try {
-      const raw = localStorage.getItem(DASHBOARD_STORAGE);
-      if (!raw) return null;
-      const data = JSON.parse(raw);
-      return (data.slots || []).find(function (s) {
-        return s.id === slotId;
-      });
+      return String(localStorage.getItem(CLASS_CODE_STORAGE_KEY) || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, "");
     } catch (e) {
-      return null;
+      return "";
     }
   }
 
-  const dashSlot = getDashboardSlot();
-  if (!dashSlot || !dashSlot.hatched) {
-    alert("此學生尚未在總覽頁孵化，請先回全班總覽完成孵化！");
-    window.location.href = "index.html";
-    return;
+  function loadDashSlotFromCloud(done) {
+    const code = readClassCode();
+    const db = window.__firebaseDb;
+    if (!code || !db) {
+      alert("請先在主頁輸入班級代碼並連接 Firebase 雲端。");
+      window.location.href = "index.html";
+      return;
+    }
+    db.ref(code + "/students")
+      .once("value")
+      .then(function (snap) {
+        const data = snap.val();
+        const slots = data && Array.isArray(data.slots) ? data.slots : [];
+        const slot = slots.find(function (s) {
+          return s.id === slotId;
+        });
+        done(slot || null);
+      })
+      .catch(function () {
+        alert("無法讀取雲端資料，請確認網路與 firebase-config.js 設定。");
+        window.location.href = "index.html";
+      });
   }
-
-  const animalName = dashSlot.animal || "crab";
-  const modelSrc = "models/animal-" + animalName + ".glb";
 
   function key(base) {
     return base + "-slot-" + slotId;
@@ -735,5 +751,15 @@
     }
   }
 
-  boot();
+  loadDashSlotFromCloud(function (slot) {
+    if (!slot || !slot.hatched) {
+      alert("此學生尚未在總覽頁孵化，請先回全班總覽完成孵化！");
+      window.location.href = "index.html";
+      return;
+    }
+    dashSlot = slot;
+    animalName = dashSlot.animal || "crab";
+    modelSrc = "models/animal-" + animalName + ".glb";
+    boot();
+  });
 })();

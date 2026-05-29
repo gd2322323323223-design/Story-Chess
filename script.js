@@ -1,5 +1,25 @@
+/* Firebase v8 compat — 設定見 firebase-config.js */
+(function initFirebaseGlobal() {
+  var cfg = typeof window !== "undefined" ? window.FIREBASE_CONFIG : null;
+  if (typeof firebase === "undefined") {
+    window.__firebaseInitError = "Firebase SDK 尚未載入，請確認 index.html 已引入 firebase-app.js。";
+    return;
+  }
+  if (!cfg || !cfg.apiKey || !cfg.databaseURL) {
+    window.__firebaseInitError =
+      "Firebase 設定不完整，請在 firebase-config.js 填入 apiKey 與 databaseURL。";
+    return;
+  }
+  if (!firebase.apps.length) {
+    firebase.initializeApp(cfg);
+  }
+  window.__firebaseDb = firebase.database();
+})();
+
 (function () {
   "use strict";
+
+  const db = window.__firebaseDb || null;
 
   const STORAGE_KEY = "classroom-dashboard-v1";
   const GROUPS_STORAGE_KEY = "classroom-dashboard-groups-v1";
@@ -25,6 +45,7 @@
   const TEACHER_PASSWORD = "1234";
   const SITE_ACCESS_PASSWORD = "2756";
   const SITE_ACCESS_SESSION_KEY = "classroom-site-access-ok-v1";
+  const CLASS_CODE_STORAGE_KEY = "classroom-class-code-v1";
 
   /** 23 種動物（與 models/animal-*.glb 檔名一致）：1~22 號依序對應前 22 種 */
   const ANIMALS = [
@@ -111,7 +132,7 @@
   };
 
   const LUCKY_DRAW_MS = 3340;
-  const LUCKY_DRAW_TICK_MS = 75;
+  const LUCKY_DRAW_TICK_MS = 120;
 
   const gridEl = document.getElementById("dashboard-grid");
   const btnTeacherMode = document.getElementById("btn-teacher-mode");
@@ -233,31 +254,11 @@
   }
 
   function loadClassProgressMeta() {
-    try {
-      const raw = localStorage.getItem(CLASS_PROGRESS_META_KEY);
-      if (!raw) return;
-      const data = JSON.parse(raw);
-      if (Array.isArray(data.celebratedThresholds)) {
-        classProgressCelebratedThresholds = data.celebratedThresholds.filter(
-          function (t) {
-            return Number.isFinite(t) && t > 0;
-          }
-        );
-      } else if (data.milestone500) {
-        classProgressCelebratedThresholds = [CLASS_PROGRESS_TIER_SIZE];
-      }
-    } catch (e) {
-      classProgressCelebratedThresholds = [];
-    }
+    classProgressCelebratedThresholds = [];
   }
 
   function saveClassProgressMeta() {
-    localStorage.setItem(
-      CLASS_PROGRESS_META_KEY,
-      JSON.stringify({
-        celebratedThresholds: classProgressCelebratedThresholds,
-      })
-    );
+    scheduleCloudSync();
   }
 
   function bootstrapClassProgressTracking(total) {
@@ -355,18 +356,12 @@
 
   function saveDailyScoreLog(pack) {
     dailyScorePack = pack;
-    localStorage.setItem(DAILY_SCORE_STORAGE_KEY, JSON.stringify(pack));
+    scheduleCloudSync();
   }
 
   function loadDailyScoreLog() {
     const today = todayDateKey();
-    let pack = null;
-    try {
-      const raw = localStorage.getItem(DAILY_SCORE_STORAGE_KEY);
-      if (raw) pack = JSON.parse(raw);
-    } catch (e) {
-      pack = null;
-    }
+    let pack = dailyScorePack;
 
     if (!pack || !Array.isArray(pack.history)) {
       pack = { currentDate: today, todayScore: 0, history: [] };
@@ -456,6 +451,570 @@
   let scoreToastTimeoutId = null;
   let groupPanelInitialized = false;
 
+  let currentClassCode = "";
+  let cloudListenerRef = null;
+  let cloudSyncTimerId = null;
+  let cloudSyncSuspended = false;
+  let appBootstrapped = false;
+  let lastCloudWriteAt = 0;
+  let classCodeModalCallback = null;
+
+  function getDb() {
+    return db || window.__firebaseDb || null;
+  }
+
+  function sanitizeClassCode(raw) {
+    return String(raw || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "");
+  }
+
+  function setCloudSyncStatus(text, isError) {
+    const statusEl = document.getElementById("class-code-sync-status");
+    const hintEl = document.getElementById("class-code-sync-hint");
+    if (statusEl) {
+      statusEl.textContent = text;
+      statusEl.classList.toggle("is-error", !!isError);
+    }
+    if (hintEl) {
+      hintEl.textContent = text;
+      hintEl.classList.toggle("is-error", !!isError);
+    }
+  }
+
+  function serializeSlotsForCloud() {
+    const source = slots.length ? slots : createDefaultSlots();
+    return source.map(function (s) {
+      return {
+        id: s.id,
+        name: s.name,
+        hatched: !!s.hatched,
+        animal: s.animal,
+        score: clampScore(s.score),
+        lives: clampLives(s.lives),
+      };
+    });
+  }
+
+  function parseSlotsFromCloud(rawSlots) {
+    if (!Array.isArray(rawSlots) || rawSlots.length !== SLOT_COUNT) {
+      return createDefaultSlots();
+    }
+    return rawSlots.map(function (s, i) {
+      const id = i + 1;
+      const savedAnimal = s.animal;
+      const savedScore =
+        typeof s.score === "number" ? clampScore(s.score) : 0;
+      return {
+        id: id,
+        name: s.name || DEFAULT_NAME,
+        hatched: !!s.hatched,
+        animal:
+          savedAnimal && isValidAnimal(savedAnimal)
+            ? savedAnimal
+            : animalForSlot(id),
+        emoji: DEFAULT_EMOJI,
+        score: savedScore,
+        lives:
+          typeof s.lives === "number" ? clampLives(s.lives) : LIVES_DEFAULT,
+      };
+    });
+  }
+
+  function parseGroupsFromCloud(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.slice(0, MAX_GROUPS).map(function (g, idx) {
+      const memberIds = Array.isArray(g.memberIds)
+        ? g.memberIds.filter(function (id) {
+            return Number.isInteger(id) && id >= 1 && id <= SLOT_COUNT;
+          })
+        : [];
+      return {
+        id: typeof g.id === "number" ? g.id : idx + 1,
+        name:
+          typeof g.name === "string" && g.name.trim()
+            ? g.name.trim()
+            : "組別 " + (idx + 1),
+        memberIds: memberIds,
+      };
+    });
+  }
+
+  function findMissionById(id) {
+    if (!id) return null;
+    for (let i = 0; i < DAILY_MISSIONS.length; i++) {
+      if (DAILY_MISSIONS[i].id === id) return DAILY_MISSIONS[i];
+    }
+    return null;
+  }
+
+  function applyMissionFromCloud(raw) {
+    if (!raw || typeof raw !== "object") {
+      currentDailyMission = null;
+      missionReminderVisible = false;
+      dailyMissionDrawCommitted = false;
+      scoreKingMission.active = false;
+      scoreKingMission.sessionScore = 0;
+      return;
+    }
+    dailyMissionDrawCommitted = !!raw.dailyMissionDrawCommitted;
+    missionReminderVisible = !!raw.missionReminderVisible;
+    currentDailyMission = raw.currentDailyMissionId
+      ? findMissionById(raw.currentDailyMissionId)
+      : null;
+    if (raw.scoreKingMission && typeof raw.scoreKingMission === "object") {
+      scoreKingMission.active = !!raw.scoreKingMission.active;
+      scoreKingMission.sessionScore =
+        typeof raw.scoreKingMission.sessionScore === "number"
+          ? Math.max(0, Math.floor(raw.scoreKingMission.sessionScore))
+          : 0;
+    } else {
+      scoreKingMission.active = false;
+      scoreKingMission.sessionScore = 0;
+    }
+    if (!missionReminderVisible) {
+      currentDailyMission = null;
+    }
+  }
+
+  function buildMissionForCloud() {
+    return {
+      currentDailyMissionId: currentDailyMission ? currentDailyMission.id : null,
+      missionReminderVisible: missionReminderVisible,
+      dailyMissionDrawCommitted: dailyMissionDrawCommitted,
+      scoreKingMission: {
+        active: scoreKingMission.active,
+        sessionScore: scoreKingMission.sessionScore,
+      },
+    };
+  }
+
+  function applyDailyScorePackFromCloud(raw) {
+    const today = todayDateKey();
+    if (!raw || !Array.isArray(raw.history)) {
+      dailyScorePack = { currentDate: today, todayScore: 0, history: [] };
+      return;
+    }
+    dailyScorePack = {
+      currentDate: raw.currentDate || today,
+      todayScore: typeof raw.todayScore === "number" ? raw.todayScore : 0,
+      history: raw.history.slice(),
+    };
+    if (dailyScorePack.currentDate !== today) {
+      if (dailyScorePack.currentDate && dailyScorePack.todayScore > 0) {
+        const prev = dailyScorePack.history.find(function (entry) {
+          return entry.date === dailyScorePack.currentDate;
+        });
+        if (prev) {
+          prev.score = dailyScorePack.todayScore;
+        } else {
+          dailyScorePack.history.unshift({
+            date: dailyScorePack.currentDate,
+            score: dailyScorePack.todayScore,
+          });
+        }
+      }
+      dailyScorePack.currentDate = today;
+      dailyScorePack.todayScore = 0;
+    }
+  }
+
+  function buildDefaultCloudData() {
+    return {
+      students: {
+        slots: serializeSlotsForCloud(),
+        updatedAt: Date.now(),
+      },
+      groups: [],
+      classProgress: { celebratedThresholds: [] },
+      dailyScore: {
+        currentDate: todayDateKey(),
+        todayScore: 0,
+        history: [],
+      },
+      timerMinuteCue: "1",
+      mission: {
+        currentDailyMissionId: null,
+        missionReminderVisible: false,
+        dailyMissionDrawCommitted: false,
+        scoreKingMission: { active: false, sessionScore: 0 },
+      },
+      updatedAt: Date.now(),
+    };
+  }
+
+  function collectLegacyLocalPayload() {
+    let hasAny = false;
+    const payload = buildDefaultCloudData();
+    try {
+      const slotsRaw = localStorage.getItem(STORAGE_KEY);
+      if (slotsRaw) {
+        const parsed = JSON.parse(slotsRaw);
+        if (parsed && Array.isArray(parsed.slots) && parsed.slots.length === SLOT_COUNT) {
+          payload.students = {
+            slots: parsed.slots.map(function (s, i) {
+              return {
+                id: i + 1,
+                name: s.name || DEFAULT_NAME,
+                hatched: !!s.hatched,
+                animal: s.animal,
+                score: typeof s.score === "number" ? s.score : 0,
+                lives: typeof s.lives === "number" ? s.lives : LIVES_DEFAULT,
+              };
+            }),
+            updatedAt: parsed.updatedAt || Date.now(),
+          };
+          hasAny = true;
+        }
+      }
+    } catch (e) {}
+    try {
+      const groupsRaw = localStorage.getItem(GROUPS_STORAGE_KEY);
+      if (groupsRaw) {
+        payload.groups = JSON.parse(groupsRaw);
+        hasAny = true;
+      }
+    } catch (e) {}
+    try {
+      const cpRaw = localStorage.getItem(CLASS_PROGRESS_META_KEY);
+      if (cpRaw) {
+        payload.classProgress = JSON.parse(cpRaw);
+        hasAny = true;
+      }
+    } catch (e) {}
+    try {
+      const dsRaw = localStorage.getItem(DAILY_SCORE_STORAGE_KEY);
+      if (dsRaw) {
+        payload.dailyScore = JSON.parse(dsRaw);
+        hasAny = true;
+      }
+    } catch (e) {}
+    try {
+      const tmRaw = localStorage.getItem(TIMER_MINUTE_CUE_STORAGE_KEY);
+      if (tmRaw) {
+        payload.timerMinuteCue = tmRaw;
+        hasAny = true;
+      }
+    } catch (e) {}
+    return hasAny ? payload : null;
+  }
+
+  function buildCloudPayload() {
+    return {
+      students: {
+        slots: serializeSlotsForCloud(),
+        updatedAt: Date.now(),
+      },
+      groups: groups,
+      classProgress: {
+        celebratedThresholds: classProgressCelebratedThresholds.slice(),
+      },
+      dailyScore: dailyScorePack || {
+        currentDate: todayDateKey(),
+        todayScore: 0,
+        history: [],
+      },
+      timerMinuteCue: timerMinuteCueEnabled ? "1" : "0",
+      mission: buildMissionForCloud(),
+      updatedAt: Date.now(),
+    };
+  }
+
+  function applyCloudData(data, options) {
+    options = options || {};
+    if (!data) data = buildDefaultCloudData();
+
+    if (data.students && Array.isArray(data.students.slots)) {
+      slots = parseSlotsFromCloud(data.students.slots);
+      slots.forEach(function (s) {
+        if (s.id === 15) s.animal = "tiger";
+        if (typeof s.score !== "number") s.score = 0;
+        if (typeof s.lives !== "number") s.lives = LIVES_DEFAULT;
+        s.emoji = DEFAULT_EMOJI;
+      });
+    } else if (options.initial) {
+      slots = createDefaultSlots();
+    }
+
+    groups = parseGroupsFromCloud(data.groups);
+    classProgressCelebratedThresholds = [];
+    if (data.classProgress && Array.isArray(data.classProgress.celebratedThresholds)) {
+      classProgressCelebratedThresholds = data.classProgress.celebratedThresholds.filter(
+        function (t) {
+          return Number.isFinite(t) && t > 0;
+        }
+      );
+    } else if (data.classProgress && data.classProgress.milestone500) {
+      classProgressCelebratedThresholds = [CLASS_PROGRESS_TIER_SIZE];
+    }
+
+    applyDailyScorePackFromCloud(data.dailyScore);
+    if (data.timerMinuteCue === "0") timerMinuteCueEnabled = false;
+    else if (data.timerMinuteCue === "1") timerMinuteCueEnabled = true;
+    applyMissionFromCloud(data.mission);
+
+    classProgressBootstrapped = false;
+
+    if (appBootstrapped) {
+      renderAll();
+      ensureGroupPanel();
+      renderGroupButtons();
+      updateClassProgress();
+      updateTimerMinuteCueButtonUI();
+      syncMissionHudLayout();
+      refreshMissionPickButton();
+    }
+  }
+
+  function scheduleCloudSync() {
+    if (!getDb() || !currentClassCode || cloudSyncSuspended) return;
+    if (cloudSyncTimerId !== null) {
+      clearTimeout(cloudSyncTimerId);
+    }
+    cloudSyncTimerId = setTimeout(flushCloudSync, 180);
+  }
+
+  function flushCloudSync() {
+    cloudSyncTimerId = null;
+    const db = getDb();
+    if (!db || !currentClassCode || cloudSyncSuspended) return;
+    const payload = buildCloudPayload();
+    lastCloudWriteAt = payload.updatedAt;
+    db.ref(currentClassCode)
+      .update(payload)
+      .then(function () {
+        setCloudSyncStatus("雲端：已同步（" + currentClassCode + "）", false);
+      })
+      .catch(function (err) {
+        console.warn("[Firebase] 同步失敗", err);
+        setCloudSyncStatus("雲端同步失敗，請檢查網路或 Firebase 設定", true);
+      });
+  }
+
+  function detachCloudListener() {
+    if (cloudListenerRef) {
+      cloudListenerRef.off();
+      cloudListenerRef = null;
+    }
+  }
+
+  function attachCloudListener(code) {
+    const db = getDb();
+    if (!db) return;
+    detachCloudListener();
+    cloudListenerRef = db.ref(code);
+    cloudListenerRef.on(
+      "value",
+      function (snap) {
+        const data = snap.val();
+        const remoteTs = data && data.updatedAt ? data.updatedAt : 0;
+        if (remoteTs && remoteTs === lastCloudWriteAt) return;
+        cloudSyncSuspended = true;
+        applyCloudData(data || buildDefaultCloudData());
+        cloudSyncSuspended = false;
+      },
+      function (err) {
+        console.warn("[Firebase] 監聽失敗", err);
+        setCloudSyncStatus("雲端連線中斷，正在重試…", true);
+      }
+    );
+  }
+
+  function rememberClassCode(code) {
+    try {
+      localStorage.setItem(CLASS_CODE_STORAGE_KEY, code);
+    } catch (e) {}
+  }
+
+  function readRememberedClassCode() {
+    try {
+      return sanitizeClassCode(localStorage.getItem(CLASS_CODE_STORAGE_KEY));
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function syncClassCodeInputs(code) {
+    const modalInput = document.getElementById("class-code-input");
+    const sidebarInput = document.getElementById("class-code-sidebar-input");
+    if (modalInput) modalInput.value = code;
+    if (sidebarInput) sidebarInput.value = code;
+  }
+
+  function showClassCodeError(msg) {
+    const errEl = document.getElementById("class-code-error");
+    if (errEl) {
+      errEl.textContent = msg;
+      errEl.hidden = !msg;
+    }
+  }
+
+  function hideClassCodeModal() {
+    const modal = document.getElementById("class-code-modal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("class-code-open");
+    showClassCodeError("");
+  }
+
+  function showClassCodeModal(callback) {
+    classCodeModalCallback = callback;
+    const modal = document.getElementById("class-code-modal");
+    const input = document.getElementById("class-code-input");
+    if (!modal || !input) {
+      if (callback) callback(false);
+      return;
+    }
+    syncClassCodeInputs(readRememberedClassCode());
+    modal.hidden = false;
+    document.body.classList.add("class-code-open");
+    if (window.__firebaseInitError) {
+      showClassCodeError(window.__firebaseInitError);
+      setCloudSyncStatus(window.__firebaseInitError, true);
+    }
+    setTimeout(function () {
+      input.focus();
+      input.select();
+    }, 0);
+  }
+
+  function connectToClassCode(rawCode, callback) {
+    const db = getDb();
+    if (!db) {
+      alert(window.__firebaseInitError || "Firebase 尚未初始化。");
+      if (callback) callback(false);
+      return;
+    }
+    const code = sanitizeClassCode(rawCode);
+    if (!code) {
+      showClassCodeError("請輸入班級代碼（英數、底線、連字號，例如 1b、3a）。");
+      if (callback) callback(false);
+      return;
+    }
+
+    setCloudSyncStatus("雲端：正在連接 " + code + "…", false);
+    detachCloudListener();
+
+    const ref = db.ref(code);
+    ref
+      .once("value")
+      .then(function (snap) {
+        let data = snap.val();
+        if (!data || !data.students || !data.students.slots) {
+          const legacy = collectLegacyLocalPayload();
+          data = legacy || buildDefaultCloudData();
+          cloudSyncSuspended = true;
+          return ref.set(data).then(function () {
+            cloudSyncSuspended = false;
+            return data;
+          });
+        }
+        return data;
+      })
+      .then(function (data) {
+        currentClassCode = code;
+        rememberClassCode(code);
+        syncClassCodeInputs(code);
+        cloudSyncSuspended = true;
+        applyCloudData(data, { initial: true });
+        cloudSyncSuspended = false;
+        attachCloudListener(code);
+        hideClassCodeModal();
+        setCloudSyncStatus("雲端：已連線（" + code + "）", false);
+        if (callback) callback(true);
+      })
+      .catch(function (err) {
+        console.warn("[Firebase] 連線失敗", err);
+        showClassCodeError("無法連接雲端，請確認 firebase-config.js 的 databaseURL 與網路。");
+        setCloudSyncStatus("雲端連線失敗", true);
+        if (callback) callback(false);
+      });
+  }
+
+  function onClassCodeSubmit() {
+    const input = document.getElementById("class-code-input");
+    const code = input ? input.value : "";
+    connectToClassCode(code, function (ok) {
+      if (ok && classCodeModalCallback) {
+        const cb = classCodeModalCallback;
+        classCodeModalCallback = null;
+        cb(true);
+      }
+    });
+  }
+
+  function onClassCodeSwitchClick() {
+    const input = document.getElementById("class-code-sidebar-input");
+    const code = input ? input.value : "";
+    const ok = confirm(
+      "切換班級代碼將載入另一班級的雲端資料。\n確定要切換至「" + sanitizeClassCode(code) + "」嗎？"
+    );
+    if (!ok) return;
+    connectToClassCode(code, function (connected) {
+      if (connected && appBootstrapped) {
+        renderAll();
+        ensureGroupPanel();
+        renderGroupButtons();
+        updateClassProgress();
+        syncMissionHudLayout();
+      }
+    });
+  }
+
+  function initCollapsiblePanel(toggleEl, bodyEl, panelEl) {
+    if (!toggleEl || !bodyEl) return;
+    toggleEl.addEventListener("click", function () {
+      const isOpen = !bodyEl.hidden;
+      bodyEl.hidden = isOpen;
+      if (panelEl) panelEl.classList.toggle("is-open", !isOpen);
+      toggleEl.setAttribute("aria-expanded", isOpen ? "false" : "true");
+    });
+  }
+
+  function setMissionReminderExpanded(expanded) {
+    const hud = document.getElementById("mission-reminder-hud");
+    const body = document.getElementById("mission-reminder-body");
+    const toggle = document.getElementById("btn-mission-reminder-toggle");
+    if (!hud || !body || !toggle) return;
+    hud.classList.toggle("is-expanded", expanded);
+    body.hidden = !expanded;
+    toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+  }
+
+  function initClassCodeUi() {
+    const submitBtn = document.getElementById("btn-class-code-submit");
+    const input = document.getElementById("class-code-input");
+    const switchBtn = document.getElementById("btn-class-code-switch");
+    const panelToggle = document.getElementById("btn-class-code-panel-toggle");
+    const panelBody = document.getElementById("class-code-panel-body");
+    const panel = document.querySelector(".tools-panel--class-code");
+
+    if (submitBtn) submitBtn.addEventListener("click", onClassCodeSubmit);
+    if (switchBtn) switchBtn.addEventListener("click", onClassCodeSwitchClick);
+    if (input) {
+      input.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          onClassCodeSubmit();
+        }
+      });
+    }
+    initCollapsiblePanel(panelToggle, panelBody, panel);
+
+    const missionToggle = document.getElementById("btn-mission-reminder-toggle");
+    const missionBody = document.getElementById("mission-reminder-body");
+    if (missionToggle && missionBody) {
+      missionToggle.addEventListener("click", function () {
+        setMissionReminderExpanded(missionBody.hidden);
+      });
+      setMissionReminderExpanded(false);
+    }
+  }
+
+  function saveMissionState() {
+    scheduleCloudSync();
+  }
+
   function animalForSlot(id) {
     return ANIMALS[(id - 1) % ANIMALS.length];
   }
@@ -504,51 +1063,24 @@
   }
 
   function loadSlots() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        slots = createDefaultSlots();
-        saveSlots();
-        return;
-      }
-      const data = JSON.parse(raw);
-      if (!data.slots || data.slots.length !== SLOT_COUNT) {
-        slots = createDefaultSlots();
-        saveSlots();
-        return;
-      }
-      slots = data.slots.map(function (s, i) {
-        const id = i + 1;
-        const savedAnimal = s.animal;
-        const savedScore =
-          typeof s.score === "number" ? clampScore(s.score) : 0;
-        return {
-          id: id,
-          name: s.name || DEFAULT_NAME,
-          hatched: !!s.hatched,
-          animal:
-            savedAnimal && isValidAnimal(savedAnimal)
-              ? savedAnimal
-              : animalForSlot(id),
-          emoji: DEFAULT_EMOJI,
-          score: savedScore,
-          lives:
-            typeof s.lives === "number" ? clampLives(s.lives) : LIVES_DEFAULT,
-        };
-      });
-    } catch (e) {
+    if (!slots.length) {
       slots = createDefaultSlots();
-      saveSlots();
     }
   }
 
-  function saveSlots() {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ slots: slots, updatedAt: Date.now() })
-    );
-    updateClassProgress();
+  function flushPersistSlots() {
+    flushCloudSync();
   }
+
+  function saveSlots() {
+    updateClassProgress();
+    scheduleCloudSync();
+  }
+
+  const LIFE_HEART_SVG =
+    '<svg class="slot__life-heart-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path class="slot__life-heart-shape" d="M12 20.8 4.6 13.4 3.5 9.5C3.5 6.8 5.6 5 8 5c1.5 0 2.9.7 4 1.9 1.1-1.2 2.5-1.9 4-1.9 2.4 0 4.5 1.8 4.5 4.5 0 3.3-2.6 6-7.3 10.2L12 20.8z"/>' +
+    "</svg>";
 
   function getSlotById(id) {
     return slots.find(function (s) {
@@ -613,8 +1145,12 @@
     mv.alt = slot.name + " 的神獸";
     mv.setAttribute("autoplay", "");
     mv.setAttribute("camera-orbit", "0deg 75deg auto");
-    mv.setAttribute("shadow-intensity", "0.8");
+    mv.setAttribute("shadow-intensity", "0.35");
     mv.setAttribute("environment-image", "neutral");
+    mv.setAttribute("interaction-prompt", "none");
+    mv.setAttribute("disable-pan", "");
+    mv.setAttribute("disable-zoom", "");
+    mv.setAttribute("disable-tap", "");
     if (extraAttrs) {
       Object.keys(extraAttrs).forEach(function (key) {
         mv.setAttribute(key, extraAttrs[key]);
@@ -697,6 +1233,11 @@
     if (animCycleTimeoutId !== null) {
       clearTimeout(animCycleTimeoutId);
       animCycleTimeoutId = null;
+    }
+
+    if (document.hidden) {
+      animCycleTimeoutId = setTimeout(runAnimationCycle, 1500);
+      return;
     }
 
     applyIdlePhase();
@@ -1321,20 +1862,11 @@
   }
 
   function loadTimerMinuteCueSetting() {
-    try {
-      const raw = localStorage.getItem(TIMER_MINUTE_CUE_STORAGE_KEY);
-      if (raw === "0") timerMinuteCueEnabled = false;
-      else if (raw === "1") timerMinuteCueEnabled = true;
-    } catch (e) {
-      timerMinuteCueEnabled = true;
-    }
+    /* 由雲端 applyCloudData 載入 */
   }
 
   function saveTimerMinuteCueSetting() {
-    localStorage.setItem(
-      TIMER_MINUTE_CUE_STORAGE_KEY,
-      timerMinuteCueEnabled ? "1" : "0"
-    );
+    scheduleCloudSync();
   }
 
   function updateTimerMinuteCueButtonUI() {
@@ -1511,39 +2043,13 @@
   }
 
   function loadGroups() {
-    try {
-      const raw = localStorage.getItem(GROUPS_STORAGE_KEY);
-      if (!raw) {
-        groups = [];
-        return;
-      }
-      const data = JSON.parse(raw);
-      if (!Array.isArray(data)) {
-        groups = [];
-        return;
-      }
-      groups = data.slice(0, MAX_GROUPS).map(function (g, idx) {
-        const memberIds = Array.isArray(g.memberIds)
-          ? g.memberIds.filter(function (id) {
-              return Number.isInteger(id) && id >= 1 && id <= SLOT_COUNT;
-            })
-          : [];
-        return {
-          id: typeof g.id === "number" ? g.id : idx + 1,
-          name:
-            typeof g.name === "string" && g.name.trim()
-              ? g.name.trim()
-              : "組別 " + (idx + 1),
-          memberIds: memberIds,
-        };
-      });
-    } catch (e) {
+    if (!Array.isArray(groups)) {
       groups = [];
     }
   }
 
   function saveGroups() {
-    localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(groups));
+    scheduleCloudSync();
   }
 
   function nextGroupId() {
@@ -1597,8 +2103,7 @@
       updateMissionScoreHud();
     }
     saveSlots();
-    renderAll();
-    updateClassProgress();
+    slots.forEach(updateSlotPresentation);
   }
 
   function undoLastScoreAction() {
@@ -1709,7 +2214,10 @@
 
     document.body.classList.toggle("bulk-pick-active", bulkPickActive);
     refreshScoreUndoButton();
-    slots.forEach(renderSlotElement);
+    slots.forEach(function (slot) {
+      const el = document.querySelector('.slot[data-slot-id="' + slot.id + '"]');
+      if (el) updateSlotBulkClasses(el, slot);
+    });
   }
 
   function openBulkPickModal() {
@@ -1868,14 +2376,17 @@
       bulkSuccessIds = [];
       ids.forEach(function (id) {
         const slot = getSlotById(id);
-        if (slot) renderSlotElement(slot);
+        const el = slot
+          ? document.querySelector('.slot[data-slot-id="' + slot.id + '"]')
+          : null;
+        if (el && slot) updateSlotBulkClasses(el, slot);
       });
       bulkSuccessTimerId = null;
     }, 850);
 
     bulkSelectedIds.forEach(function (id) {
       const slot = getSlotById(id);
-      if (slot) renderSlotElement(slot);
+      if (slot) updateSlotPresentation(slot);
     });
     renderGroupButtons();
     updateBulkPickUI();
@@ -2324,7 +2835,10 @@
       recordDailyScoreChange(delta * memberCount);
     }
     saveSlots();
-    renderAll();
+    group.memberIds.forEach(function (id) {
+      const s = getSlotById(id);
+      if (s) updateSlotPresentation(s);
+    });
     playScoreDing();
     showGroupScoreToast(group, delta);
   }
@@ -2509,7 +3023,7 @@
     saveSlots();
     luckyDrawWinnerIds.forEach(function (id) {
       const slot = getSlotById(id);
-      if (slot) renderSlotElement(slot);
+      if (slot) updateSlotPresentation(slot);
     });
     playScoreDing();
 
@@ -2928,6 +3442,7 @@
     scoreKingMission.active = false;
     scoreKingMission.sessionScore = 0;
     hideMissionScoreHud();
+    saveMissionState();
   }
 
   function applyTeacherMissionReplacement(mission) {
@@ -2937,6 +3452,8 @@
     showMissionReminder(mission);
     if (mission.type === "scoreKing") {
       startScoreKingMission();
+    } else {
+      saveMissionState();
     }
     closeMissionPickModal();
   }
@@ -3040,13 +3557,16 @@
     currentDailyMission = mission;
     missionReminderVisible = true;
     fillMissionContent("reminder", mission);
+    setMissionReminderExpanded(false);
     syncMissionHudLayout();
+    saveMissionState();
   }
 
   function hideMissionReminder() {
     missionReminderVisible = false;
     currentDailyMission = null;
     syncMissionHudLayout();
+    saveMissionState();
   }
 
   function closeMissionReminderManual() {
@@ -3073,6 +3593,7 @@
     if (!scoreKingMission.active || !Number.isFinite(delta) || delta <= 0) return;
     scoreKingMission.sessionScore += Math.floor(delta);
     updateMissionScoreHud();
+    saveMissionState();
   }
 
   function updateMissionScoreHud() {
@@ -3126,6 +3647,7 @@
     if (rollEl) rollEl.hidden = true;
     fillMissionContent("daily", mission);
     dailyMissionDrawCommitted = true;
+    saveMissionState();
     actionsEl.innerHTML = "";
 
     if (mission.type === "scoreKing") {
@@ -3219,6 +3741,7 @@
     scoreKingMission.sessionScore = 0;
     showMissionScoreHud();
     updateMissionScoreHud();
+    saveMissionState();
   }
 
   function grantClassMissionBonus(bonus, options) {
@@ -3230,7 +3753,7 @@
     });
     recordDailyScoreChange(bonus * SLOT_COUNT);
     saveSlots();
-    renderAll();
+    slots.forEach(updateSlotPresentation);
     if (opts.withFeedback && bonus) {
       playScoreDing();
       showBulkScoreToast(SLOT_COUNT, bonus);
@@ -3352,6 +3875,7 @@
     } else {
       showMissionEncourageOutcome(score);
     }
+    saveMissionState();
   }
 
   function initDailyMissionModule() {
@@ -3397,15 +3921,22 @@
   }
 
   function buildBackupArchiveObject() {
+    flushCloudSync();
+    const payload = buildCloudPayload();
     return {
       version: BACKUP_ARCHIVE_VERSION,
       exportedAt: Date.now(),
+      classCode: currentClassCode,
       data: {
-        slots: localStorage.getItem(STORAGE_KEY),
-        groups: localStorage.getItem(GROUPS_STORAGE_KEY),
-        classProgress: localStorage.getItem(CLASS_PROGRESS_META_KEY),
-        dailyScore: localStorage.getItem(DAILY_SCORE_STORAGE_KEY),
-        timerMinuteCue: localStorage.getItem(TIMER_MINUTE_CUE_STORAGE_KEY),
+        slots: JSON.stringify({
+          slots: payload.students.slots,
+          updatedAt: payload.students.updatedAt,
+        }),
+        groups: JSON.stringify(payload.groups),
+        classProgress: JSON.stringify(payload.classProgress),
+        dailyScore: JSON.stringify(payload.dailyScore),
+        timerMinuteCue: payload.timerMinuteCue,
+        mission: JSON.stringify(payload.mission),
       },
     };
   }
@@ -3464,45 +3995,46 @@
       throw new Error("學生資料筆數不符（需 22 位）。");
     }
 
-    localStorage.setItem(STORAGE_KEY, data.slots);
+    cloudSyncSuspended = true;
+    slots = parseSlotsFromCloud(slotsParsed.slots);
     if (data.groups) {
-      localStorage.setItem(GROUPS_STORAGE_KEY, data.groups);
+      groups = parseGroupsFromCloud(JSON.parse(data.groups));
     } else {
-      localStorage.removeItem(GROUPS_STORAGE_KEY);
+      groups = [];
     }
     if (data.classProgress) {
-      localStorage.setItem(CLASS_PROGRESS_META_KEY, data.classProgress);
+      const cp = JSON.parse(data.classProgress);
+      classProgressCelebratedThresholds = Array.isArray(cp.celebratedThresholds)
+        ? cp.celebratedThresholds.filter(function (t) {
+            return Number.isFinite(t) && t > 0;
+          })
+        : [];
     } else {
-      localStorage.removeItem(CLASS_PROGRESS_META_KEY);
+      classProgressCelebratedThresholds = [];
     }
     if (data.dailyScore) {
-      localStorage.setItem(DAILY_SCORE_STORAGE_KEY, data.dailyScore);
-    } else {
-      localStorage.removeItem(DAILY_SCORE_STORAGE_KEY);
+      applyDailyScorePackFromCloud(JSON.parse(data.dailyScore));
     }
-    if (data.timerMinuteCue) {
-      localStorage.setItem(TIMER_MINUTE_CUE_STORAGE_KEY, data.timerMinuteCue);
-    } else {
-      localStorage.removeItem(TIMER_MINUTE_CUE_STORAGE_KEY);
+    if (data.timerMinuteCue === "0") timerMinuteCueEnabled = false;
+    else if (data.timerMinuteCue === "1") timerMinuteCueEnabled = true;
+    if (data.mission) {
+      applyMissionFromCloud(JSON.parse(data.mission));
     }
-
-    loadSlots();
-    loadGroups();
-    loadClassProgressMeta();
-    loadDailyScoreLog();
-    loadTimerMinuteCueSetting();
-    updateTimerMinuteCueButtonUI();
     slots.forEach(function (s) {
       if (s.id === 15) s.animal = "tiger";
       if (typeof s.score !== "number") s.score = 0;
       if (typeof s.lives !== "number") s.lives = LIVES_DEFAULT;
       s.emoji = DEFAULT_EMOJI;
     });
-    saveSlots();
+    classProgressBootstrapped = false;
+    cloudSyncSuspended = false;
+    flushCloudSync();
     renderAll();
     ensureGroupPanel();
     renderGroupButtons();
     updateClassProgress();
+    updateTimerMinuteCueButtonUI();
+    syncMissionHudLayout();
   }
 
   function copyTextToClipboard(text) {
@@ -3658,8 +4190,8 @@
     if (!slot || slot.lives <= 0) return;
 
     slot.lives = clampLives(slot.lives - 1);
-    saveSlots();
     updateSlotLifeDisplay(slot);
+    saveSlots();
     playLifeWarningSound();
 
     if (slot.lives === 0) {
@@ -3684,8 +4216,8 @@
     if (livesEl.dataset.livesBound === "1") return;
     livesEl.dataset.livesBound = "1";
     livesEl.addEventListener("click", function (ev) {
-      const heart = ev.target.closest(".slot__life-heart.is-full");
-      if (!heart) return;
+      const heart = ev.target.closest(".slot__life-heart");
+      if (!heart || !heart.classList.contains("is-full")) return;
       ev.stopPropagation();
       ev.preventDefault();
       deductSlotLife(slotId);
@@ -3694,7 +4226,11 @@
 
   function ensureSlotLifeHearts(livesEl, slotId) {
     const existing = livesEl.querySelectorAll(".slot__life-heart");
-    if (existing.length === LIVES_MAX) {
+    const hasSvgHearts =
+      existing.length === LIVES_MAX &&
+      existing[0] &&
+      existing[0].querySelector("svg.slot__life-heart-icon");
+    if (hasSvgHearts) {
       bindSlotLivesEvents(livesEl, slotId);
       return existing;
     }
@@ -3705,8 +4241,7 @@
       heart.type = "button";
       heart.className = "slot__life-heart is-full";
       heart.dataset.lifeIndex = String(i);
-      heart.innerHTML =
-        '<span class="slot__life-heart-icon" aria-hidden="true">♥</span>';
+      heart.innerHTML = LIFE_HEART_SVG;
       livesEl.appendChild(heart);
     }
     bindSlotLivesEvents(livesEl, slotId);
@@ -3785,6 +4320,104 @@
     } else {
       stageEl.setAttribute("aria-label", name + " 的蛋，點擊命名或孵化");
     }
+  }
+
+  function getSlotStageKey(slot) {
+    if (slot.hatched) {
+      return "h:" + slot.animal;
+    }
+    return "e:" + eggHueForSlot(slot.id);
+  }
+
+  function renderSlotStage(stage, slot) {
+    if (!stage) return;
+    const key = getSlotStageKey(slot);
+    if (stage.dataset.stageKey === key && stage.firstChild) {
+      return;
+    }
+    stage.dataset.stageKey = key;
+    stage.innerHTML = "";
+    if (slot.hatched) {
+      appendHatchedBeast(stage, slot, "slot__viewer");
+    } else {
+      const egg = document.createElement("div");
+      egg.className = "slot__egg";
+      egg.style.setProperty("--egg-hue", String(eggHueForSlot(slot.id)));
+      stage.appendChild(egg);
+    }
+  }
+
+  function ensureQuickScoreMenu(quickMenu, slotId) {
+    if (!quickMenu || quickMenu.dataset.built === "1") return;
+    quickMenu.dataset.built = "1";
+    QUICK_ADD_VALUES.forEach(function (delta) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "score-quick-btn";
+      btn.textContent = "+" + delta;
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        applyQuickScore(slotId, delta);
+      });
+      quickMenu.appendChild(btn);
+    });
+  }
+
+  function updateSlotQuickMenu(el, slot) {
+    const quickMenu = el.querySelector(".score-quick-menu");
+    if (!quickMenu) return;
+    const isOpen = activeScoreMenuSlotId === slot.id && !teacherMode;
+    quickMenu.classList.toggle("is-open", isOpen);
+    quickMenu.setAttribute("aria-hidden", isOpen ? "false" : "true");
+  }
+
+  function updateSlotBulkClasses(el, slot) {
+    el.classList.toggle(
+      "slot--bulk-selected",
+      bulkPickActive && bulkSelectedIds.indexOf(slot.id) >= 0
+    );
+    el.classList.toggle(
+      "slot--bulk-success",
+      bulkSuccessIds.indexOf(slot.id) >= 0
+    );
+  }
+
+  function syncAllQuickScoreMenus() {
+    slots.forEach(function (slot) {
+      const el = document.querySelector('.slot[data-slot-id="' + slot.id + '"]');
+      if (el) updateSlotQuickMenu(el, slot);
+    });
+  }
+
+  function updateSlotPresentation(slot) {
+    const el = document.querySelector('.slot[data-slot-id="' + slot.id + '"]');
+    if (!el) {
+      renderSlotElement(slot);
+      return;
+    }
+
+    el.classList.toggle("is-hatched", slot.hatched);
+    el.classList.toggle("is-sleeping", slot.lives === 0);
+
+    const footerEmoji = el.querySelector(".slot__footer-part--emoji");
+    const footerName = el.querySelector(".slot__footer-part--name");
+    const footerScore = el.querySelector(".slot__footer-part--score");
+
+    if (footerEmoji) {
+      footerEmoji.textContent = slot.emoji || DEFAULT_EMOJI;
+    }
+    if (footerName) {
+      footerName.textContent = slot.name;
+    }
+    if (footerScore) {
+      footerScore.textContent = String(slot.score).padStart(1, "0");
+    }
+
+    renderSlotLives(el, slot);
+    updateSlotQuickMenu(el, slot);
+    updateSlotBulkClasses(el, slot);
+    applySlotDrawClasses(el, slot.id);
+    updateSlotStageA11y(el, slot);
   }
 
   function renderSlotElement(slot) {
@@ -3891,41 +4524,14 @@
     el.classList.toggle("is-sleeping", slot.lives === 0);
 
     if (quickMenu) {
-      quickMenu.innerHTML = "";
-      QUICK_ADD_VALUES.forEach(function (delta) {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "score-quick-btn";
-        btn.textContent = "+" + delta;
-        btn.addEventListener("click", function (ev) {
-          ev.stopPropagation();
-          applyQuickScore(slot.id, delta);
-        });
-        quickMenu.appendChild(btn);
-      });
-      const isOpen = activeScoreMenuSlotId === slot.id && !teacherMode;
-      quickMenu.classList.toggle("is-open", isOpen);
-      quickMenu.setAttribute("aria-hidden", isOpen ? "false" : "true");
+      ensureQuickScoreMenu(quickMenu, slot.id);
+      updateSlotQuickMenu(el, slot);
     }
 
-    const stage = el.querySelector(".slot__stage");
-    stage.innerHTML = "";
-
-    if (slot.hatched) {
-      appendHatchedBeast(stage, slot, "slot__viewer");
-    } else {
-      const egg = document.createElement("div");
-      egg.className = "slot__egg";
-      egg.style.setProperty("--egg-hue", String(eggHueForSlot(slot.id)));
-      stage.appendChild(egg);
-    }
+    renderSlotStage(el.querySelector(".slot__stage"), slot);
 
     applySlotDrawClasses(el, slot.id);
-    el.classList.toggle(
-      "slot--bulk-selected",
-      bulkPickActive && bulkSelectedIds.indexOf(slot.id) >= 0
-    );
-    el.classList.toggle("slot--bulk-success", bulkSuccessIds.indexOf(slot.id) >= 0);
+    updateSlotBulkClasses(el, slot);
     updateSlotStageA11y(el, slot);
   }
 
@@ -3939,7 +4545,10 @@
     if (activeScoreMenuSlotId === null) return;
     const prev = getSlotById(activeScoreMenuSlotId);
     activeScoreMenuSlotId = null;
-    if (prev) renderSlotElement(prev);
+    if (prev) {
+      const el = document.querySelector('.slot[data-slot-id="' + prev.id + '"]');
+      if (el) updateSlotQuickMenu(el, prev);
+    }
   }
 
   function closeAllQuickScoreMenus() {
@@ -3957,7 +4566,7 @@
     }
     saveSlots();
     activeScoreMenuSlotId = null;
-    renderSlotElement(slot);
+    updateSlotPresentation(slot);
     applyScoreReaction(slotId, delta);
     playScoreDing();
     showScoreToast(slot, delta);
@@ -4006,7 +4615,7 @@
     updateBulkPickUI();
     refreshScoreUndoButton();
     refreshMissionPickButton();
-    renderAll();
+    syncAllQuickScoreMenus();
   }
 
   function ensureTeacherModeOn() {
@@ -4076,7 +4685,7 @@
       const delta = newScore - oldScore;
       if (delta === 0) {
         saveSlots();
-        renderSlotElement(slot);
+        updateSlotPresentation(slot);
         return;
       }
 
@@ -4085,7 +4694,7 @@
 
       recordDailyScoreChange(delta);
       saveSlots();
-      renderSlotElement(slot);
+      updateSlotPresentation(slot);
       applyScoreReaction(slotId, delta);
       playScoreDing();
       showScoreToast(slot, delta);
@@ -4098,11 +4707,13 @@
       const prev = activeScoreMenuSlotId;
       activeScoreMenuSlotId = slotId;
       if (prev !== null && prev !== slotId) {
+        const prevEl = document.querySelector('.slot[data-slot-id="' + prev + '"]');
         const prevSlot = getSlotById(prev);
-        if (prevSlot) renderSlotElement(prevSlot);
+        if (prevEl && prevSlot) updateSlotQuickMenu(prevEl, prevSlot);
       }
     }
-    renderSlotElement(slot);
+    const el = document.querySelector('.slot[data-slot-id="' + slotId + '"]');
+    if (el) updateSlotQuickMenu(el, slot);
   }
 
   function onSlotTeacherAction(slotId) {
@@ -4263,9 +4874,13 @@
 
   function boot() {
     if (!gridEl) return;
+    initClassCodeUi();
     ensureSiteAccess(function (ok) {
       if (!ok) return;
-      continueBoot();
+      showClassCodeModal(function (codeOk) {
+        if (!codeOk) return;
+        continueBoot();
+      });
     });
   }
 
@@ -4276,16 +4891,8 @@
     loadClassProgressMeta();
     loadDailyScoreLog();
     initClassProgressUI();
+    updateTimerMinuteCueButtonUI();
 
-    slots.forEach(function (s) {
-      if (s.id === 15) {
-        s.animal = "tiger";
-      }
-      if (typeof s.score !== "number") s.score = 0;
-      if (typeof s.lives !== "number") s.lives = LIVES_DEFAULT;
-      s.emoji = DEFAULT_EMOJI;
-    });
-    saveSlots();
     preloadFreesoundEffects();
     initToolsSidebar();
 
@@ -4329,6 +4936,20 @@
       }
     });
 
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) {
+        if (animCycleTimeoutId !== null) {
+          clearTimeout(animCycleTimeoutId);
+          animCycleTimeoutId = null;
+        }
+      } else {
+        startAnimationCycle();
+      }
+    });
+
+    window.addEventListener("beforeunload", flushCloudSync);
+
+    appBootstrapped = true;
     renderAll();
     ensureGroupPanel();
     initBulkUiBindings();
