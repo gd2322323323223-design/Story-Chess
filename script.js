@@ -2,17 +2,26 @@
   "use strict";
 
   const STORAGE_KEY = "classroom-dashboard-v1";
-  const EMOJI_DAY_STORAGE_KEY = "classroom-dashboard-emoji-day-v1";
   const GROUPS_STORAGE_KEY = "classroom-dashboard-groups-v1";
   const TIMER_MINUTE_CUE_STORAGE_KEY = "classroom-dashboard-timer-minute-cue-v1";
   const MAX_GROUPS = 10;
   const SLOT_COUNT = 22;
   const DEFAULT_NAME = "待命名";
   const DEFAULT_EMOJI = "😄";
+  const EMOJI_SCORE_UP = "😍";
+  const EMOJI_SAD = "😢";
+  const EMOJI_SLEEP = "😴";
+  const EMOJI_SCORE_DOWN = "😱";
+  const EMOJI_REACTION_MS = 10000;
   const SCORE_MIN = 0;
   const SCORE_MAX = 999;
   const LIVES_MAX = 3;
   const LIVES_DEFAULT = 3;
+  const CLASS_PROGRESS_TIER_SIZE = 500;
+  const CLASS_PROGRESS_META_KEY = "classroom-class-progress-meta-v1";
+  const DAILY_SCORE_STORAGE_KEY = "classroom-daily-score-log-v1";
+  const BACKUP_ARCHIVE_VERSION = 1;
+  const CLASS_SAVECODE_PREFIX = "AI-BK1:";
   const TEACHER_PASSWORD = "1234";
   const SITE_ACCESS_PASSWORD = "2756";
   const SITE_ACCESS_SESSION_KEY = "classroom-site-access-ok-v1";
@@ -42,17 +51,6 @@
     "penguin",
     "polar",
     "hog",
-  ];
-
-  const EMOJI_OPTIONS = [
-    "😢",
-    "😄",
-    "😍",
-    "🎉",
-    "💢",
-    "😱",
-    "😴",
-    "🤔",
   ];
 
   const IDLE_ANIM = "idle";
@@ -151,9 +149,307 @@
   let countdownMinuteThresholds = [];
   let countdownMinuteCuesPlayed = [];
   let timerMinuteCueEnabled = true;
+  let timerExpanded = false;
   let bulkSelectedIds = [];
   let bulkPickActive = false;
   let bulkSuccessIds = [];
+  const SCORE_UNDO_MAX = 50;
+  let scoreUndoStack = [];
+  let classProgressCelebratedThresholds = [];
+  let classProgressPrevTotal = null;
+  let classProgressBootstrapped = false;
+  let dailyScorePack = null;
+  const slotEmojiTimers = {};
+  let dailyMissionDrawRunning = false;
+  let missionConfettiTimerId = null;
+  let currentDailyMission = null;
+  let missionReminderVisible = false;
+  let dailyMissionDrawCommitted = false;
+  const scoreKingMission = {
+    active: false,
+    sessionScore: 0,
+  };
+
+  const MISSION_SCORE_GOAL = 30;
+  const MISSION_CLASS_BONUS = 3;
+  const MISSION_ROLL_MS = 2500;
+  const MISSION_DEFAULT_REWARD = "全班可加 3 分！";
+
+  const DAILY_MISSIONS = [
+    {
+      id: "harvest",
+      title: "收穫滿滿",
+      desc: "課堂完結時，如果有同學分享這節課學會了什麼新知識。",
+      reward: MISSION_DEFAULT_REWARD,
+    },
+    {
+      id: "praise",
+      title: "讚不絕口",
+      desc: "這節課裏，如果同學的上課表現能讓老師不斷稱讚。",
+      reward: MISSION_DEFAULT_REWARD,
+    },
+    {
+      id: "active",
+      title: "積極學習",
+      desc: "這節課裏，所有同學積極舉手回答問題。",
+      reward: MISSION_DEFAULT_REWARD,
+    },
+    {
+      id: "rules",
+      title: "認真守規",
+      desc: "這節課裏，如果沒有人被扣除愛心❤️。",
+      reward: MISSION_DEFAULT_REWARD,
+    },
+    {
+      id: "scoreKing",
+      title: "誰是得分王",
+      type: "scoreKing",
+      desc: "這節課裏，如果全班取得超過 " + MISSION_SCORE_GOAL + " 分。",
+      reward: MISSION_DEFAULT_REWARD,
+    },
+  ];
+
+  function getClassTotalScore() {
+    return slots.reduce(function (sum, s) {
+      const n = typeof s.score === "number" ? s.score : 0;
+      return sum + n;
+    }, 0);
+  }
+
+  function computeClassProgressTier(total) {
+    const tierSize = CLASS_PROGRESS_TIER_SIZE;
+    const safeTotal = Math.max(0, total);
+    const level = Math.floor(safeTotal / tierSize) + 1;
+    const minScore = (level - 1) * tierSize;
+    const maxScore = level * tierSize;
+    const pct =
+      tierSize > 0 ? ((safeTotal - minScore) / tierSize) * 100 : 0;
+    return {
+      level: level,
+      minScore: minScore,
+      maxScore: maxScore,
+      pct: Math.min(100, Math.max(0, pct)),
+    };
+  }
+
+  function loadClassProgressMeta() {
+    try {
+      const raw = localStorage.getItem(CLASS_PROGRESS_META_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (Array.isArray(data.celebratedThresholds)) {
+        classProgressCelebratedThresholds = data.celebratedThresholds.filter(
+          function (t) {
+            return Number.isFinite(t) && t > 0;
+          }
+        );
+      } else if (data.milestone500) {
+        classProgressCelebratedThresholds = [CLASS_PROGRESS_TIER_SIZE];
+      }
+    } catch (e) {
+      classProgressCelebratedThresholds = [];
+    }
+  }
+
+  function saveClassProgressMeta() {
+    localStorage.setItem(
+      CLASS_PROGRESS_META_KEY,
+      JSON.stringify({
+        celebratedThresholds: classProgressCelebratedThresholds,
+      })
+    );
+  }
+
+  function bootstrapClassProgressTracking(total) {
+    if (classProgressBootstrapped) return;
+    classProgressBootstrapped = true;
+    classProgressPrevTotal = total;
+    for (
+      let t = CLASS_PROGRESS_TIER_SIZE;
+      t <= total;
+      t += CLASS_PROGRESS_TIER_SIZE
+    ) {
+      if (classProgressCelebratedThresholds.indexOf(t) < 0) {
+        classProgressCelebratedThresholds.push(t);
+      }
+    }
+    saveClassProgressMeta();
+  }
+
+  function checkClassProgressCelebration(prevTotal, newTotal) {
+    if (!classProgressBootstrapped) return;
+    let highestNewThreshold = null;
+    for (
+      let t = CLASS_PROGRESS_TIER_SIZE;
+      t <= newTotal;
+      t += CLASS_PROGRESS_TIER_SIZE
+    ) {
+      if (prevTotal < t && newTotal >= t) {
+        highestNewThreshold = t;
+      }
+    }
+    if (highestNewThreshold === null) {
+      classProgressPrevTotal = newTotal;
+      return;
+    }
+    for (
+      let t = CLASS_PROGRESS_TIER_SIZE;
+      t <= highestNewThreshold;
+      t += CLASS_PROGRESS_TIER_SIZE
+    ) {
+      if (classProgressCelebratedThresholds.indexOf(t) < 0) {
+        classProgressCelebratedThresholds.push(t);
+      }
+    }
+    saveClassProgressMeta();
+    showClassProgressCelebration(highestNewThreshold);
+    classProgressPrevTotal = newTotal;
+  }
+
+  function playClassCelebrationSound() {
+    playLuckyDrawSound();
+  }
+
+  function showClassProgressCelebration(threshold) {
+    const modal = document.getElementById("class-progress-celebration-modal");
+    if (!modal) return;
+    const level = Math.floor(threshold / CLASS_PROGRESS_TIER_SIZE);
+    const titleEl = document.getElementById("class-progress-celebration-title");
+    const messageEl = document.getElementById(
+      "class-progress-celebration-message"
+    );
+    if (titleEl) {
+      titleEl.textContent = "🐉 恭喜全班！Lv." + level + " 達成！";
+    }
+    if (messageEl) {
+      messageEl.innerHTML =
+        "全班總得分突破 " +
+        threshold +
+        " 分！<br />成功晉升 <strong>【守護神獸 Lv." +
+        level +
+        "】</strong>！";
+    }
+    modal.hidden = false;
+    document.body.classList.add("class-progress-celebration-open");
+    playClassCelebrationSound();
+  }
+
+  function closeClassProgressCelebration() {
+    const modal = document.getElementById("class-progress-celebration-modal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("class-progress-celebration-open");
+  }
+
+  function initClassProgressUI() {
+    const closeBtn = document.getElementById("btn-class-progress-celebration-close");
+    const modal = document.getElementById("class-progress-celebration-modal");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", closeClassProgressCelebration);
+    }
+    if (modal) {
+      modal.addEventListener("click", function (ev) {
+        if (ev.target === modal) closeClassProgressCelebration();
+      });
+    }
+  }
+
+  function saveDailyScoreLog(pack) {
+    dailyScorePack = pack;
+    localStorage.setItem(DAILY_SCORE_STORAGE_KEY, JSON.stringify(pack));
+  }
+
+  function loadDailyScoreLog() {
+    const today = todayDateKey();
+    let pack = null;
+    try {
+      const raw = localStorage.getItem(DAILY_SCORE_STORAGE_KEY);
+      if (raw) pack = JSON.parse(raw);
+    } catch (e) {
+      pack = null;
+    }
+
+    if (!pack || !Array.isArray(pack.history)) {
+      pack = { currentDate: today, todayScore: 0, history: [] };
+    }
+
+    if (pack.currentDate !== today) {
+      if (pack.currentDate && pack.todayScore > 0) {
+        const prev = pack.history.find(function (entry) {
+          return entry.date === pack.currentDate;
+        });
+        if (prev) {
+          prev.score = pack.todayScore;
+        } else {
+          pack.history.unshift({
+            date: pack.currentDate,
+            score: pack.todayScore,
+          });
+        }
+      }
+      pack.currentDate = today;
+      pack.todayScore = 0;
+      saveDailyScoreLog(pack);
+      return pack;
+    }
+
+    dailyScorePack = pack;
+    return pack;
+  }
+
+  function getTodayClassScore() {
+    const pack = dailyScorePack || loadDailyScoreLog();
+    return typeof pack.todayScore === "number" ? pack.todayScore : 0;
+  }
+
+  function recordDailyScoreChange(delta) {
+    if (!Number.isFinite(delta) || delta === 0) return;
+    const pack = loadDailyScoreLog();
+    const next = (pack.todayScore || 0) + Math.floor(delta);
+    pack.todayScore = Math.max(0, next);
+    saveDailyScoreLog(pack);
+    if (delta > 0) {
+      notifyMissionScoreGain(delta);
+    }
+  }
+
+  function updateClassProgress() {
+    const total = getClassTotalScore();
+    const tier = computeClassProgressTier(total);
+    const todayScore = getTodayClassScore();
+    const prevTotal =
+      classProgressPrevTotal == null ? total : classProgressPrevTotal;
+
+    bootstrapClassProgressTracking(total);
+
+    const label = document.getElementById("class-progress-label");
+    const bar = document.getElementById("class-progress-bar");
+    const dailyEl = document.getElementById("class-progress-daily");
+    const track = document.querySelector(".class-progress-track");
+
+    if (label) {
+      label.textContent =
+        "全班總得分 (Lv." +
+        tier.level +
+        ")：" +
+        total +
+        " / " +
+        tier.maxScore;
+    }
+    if (dailyEl) {
+      dailyEl.textContent = "今日全班得分：" + todayScore;
+    }
+    if (bar) {
+      bar.style.width = tier.pct + "%";
+      bar.setAttribute("aria-valuenow", String(Math.round(tier.pct)));
+    }
+    if (track) {
+      track.setAttribute("aria-valuemin", String(tier.minScore));
+      track.setAttribute("aria-valuemax", String(tier.maxScore));
+      track.setAttribute("aria-valuenow", String(total));
+    }
+
+    checkClassProgressCelebration(prevTotal, total);
+  }
   let bulkSuccessTimerId = null;
   let bulkUiBindingsDone = false;
   let groups = [];
@@ -224,7 +520,6 @@
       slots = data.slots.map(function (s, i) {
         const id = i + 1;
         const savedAnimal = s.animal;
-        const savedEmoji = s.emoji;
         const savedScore =
           typeof s.score === "number" ? clampScore(s.score) : 0;
         return {
@@ -235,12 +530,7 @@
             savedAnimal && isValidAnimal(savedAnimal)
               ? savedAnimal
               : animalForSlot(id),
-          emoji:
-            savedEmoji === "💩"
-              ? "🤔"
-              : typeof savedEmoji === "string" && savedEmoji.length
-                ? savedEmoji
-                : DEFAULT_EMOJI,
+          emoji: DEFAULT_EMOJI,
           score: savedScore,
           lives:
             typeof s.lives === "number" ? clampLives(s.lives) : LIVES_DEFAULT,
@@ -257,12 +547,53 @@
       STORAGE_KEY,
       JSON.stringify({ slots: slots, updatedAt: Date.now() })
     );
+    updateClassProgress();
   }
 
   function getSlotById(id) {
     return slots.find(function (s) {
       return s.id === id;
     });
+  }
+
+  function clearSlotEmojiTimer(slotId) {
+    if (slotEmojiTimers[slotId]) {
+      clearTimeout(slotEmojiTimers[slotId]);
+      delete slotEmojiTimers[slotId];
+    }
+  }
+
+  function updateSlotEmojiDisplay(slotId) {
+    const slot = getSlotById(slotId);
+    if (!slot) return;
+    const el = document.querySelector('.slot[data-slot-id="' + slotId + '"]');
+    const footerEmoji = el && el.querySelector(".slot__footer-part--emoji");
+    if (footerEmoji) {
+      footerEmoji.textContent = slot.emoji || DEFAULT_EMOJI;
+    }
+  }
+
+  function setSlotReactionEmoji(slotId, emoji) {
+    const slot = getSlotById(slotId);
+    if (!slot) return;
+
+    clearSlotEmojiTimer(slotId);
+    slot.emoji = emoji;
+    updateSlotEmojiDisplay(slotId);
+
+    slotEmojiTimers[slotId] = setTimeout(function () {
+      slot.emoji = DEFAULT_EMOJI;
+      updateSlotEmojiDisplay(slotId);
+      delete slotEmojiTimers[slotId];
+    }, EMOJI_REACTION_MS);
+  }
+
+  function applyScoreReaction(slotId, delta) {
+    if (delta > 0) {
+      setSlotReactionEmoji(slotId, EMOJI_SCORE_UP);
+    } else if (delta < 0) {
+      setSlotReactionEmoji(slotId, EMOJI_SCORE_DOWN);
+    }
   }
 
   function setViewerAnimation(mv, animName) {
@@ -393,6 +724,8 @@
   // 針對指定 Sound ID 的快取（避免每次重新打 Freesound）
   const SOUND_ID_SCORE = 241809;
   const SOUND_ID_LUCKY = 139005;
+  const SOUND_ID_LIFE = 381778;
+  const SOUND_ID_MISSION_DRAW = 145450;
   const SOUND_ID_TIMER = 81159;
   const SOUND_ID_TIMER_MINUTE = 383602;
   const freesoundIdUrlCache = {};
@@ -553,6 +886,8 @@
     [
       SOUND_ID_SCORE,
       SOUND_ID_LUCKY,
+      SOUND_ID_LIFE,
+      SOUND_ID_MISSION_DRAW,
       SOUND_ID_TIMER,
       SOUND_ID_TIMER_MINUTE,
     ].forEach(function (soundId) {
@@ -694,8 +1029,8 @@
     return webAudioCtx;
   }
 
-  /** 扣血：溫和低頻提醒音（200Hz 短正弦波） */
-  function playLifeWarningSound() {
+  /** 扣血：本地後備提醒音 */
+  function playLifeWarningFallback() {
     const ctx = getWebAudioContext();
     if (!ctx) return;
 
@@ -715,6 +1050,14 @@
     gain.connect(ctx.destination);
     osc.start(t);
     osc.stop(t + dur + 0.02);
+  }
+
+  function playLifeWarningSound() {
+    if (FREESOUND_TOKEN) {
+      void playFreesoundById(SOUND_ID_LIFE, 0.85);
+      return;
+    }
+    playLifeWarningFallback();
   }
 
   /** 加分用的本地合成短促「叮！」（在沒有 Freesound 金鑰時使用） */
@@ -898,6 +1241,13 @@
   }
 
   function showTimerAlarmModal() {
+    syncTimerExpandedAlarmButton();
+    if (timerExpanded) {
+      const modal = document.getElementById("timer-alarm-modal");
+      if (modal) modal.hidden = true;
+      document.body.classList.remove("timer-alarm-open");
+      return;
+    }
     const modal = document.getElementById("timer-alarm-modal");
     if (modal) modal.hidden = false;
     document.body.classList.add("timer-alarm-open");
@@ -907,6 +1257,13 @@
     const modal = document.getElementById("timer-alarm-modal");
     if (modal) modal.hidden = true;
     document.body.classList.remove("timer-alarm-open");
+    syncTimerExpandedAlarmButton();
+  }
+
+  function syncTimerExpandedAlarmButton() {
+    const btn = document.getElementById("btn-timer-expanded-alarm-close");
+    if (!btn) return;
+    btn.hidden = !(timerAlarmActive && timerExpanded);
   }
 
   function stopTimerAlarmLoop() {
@@ -922,6 +1279,12 @@
       clearInterval(timerAlarmIntervalId);
       timerAlarmIntervalId = null;
     }
+  }
+
+  function dismissTimerAlarmAndReturn() {
+    stopTimerAlarmLoop();
+    shrinkTimerDisplay();
+    closeToolsSidebar();
   }
 
   async function startTimerAlarmLoop() {
@@ -1065,21 +1428,6 @@
     return y + "-" + m + "-" + day;
   }
 
-  function hashSlotDay(slotId, dateKey) {
-    let h = 2166136261;
-    const str = dateKey + ":" + slotId;
-    for (let i = 0; i < str.length; i++) {
-      h ^= str.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return Math.abs(h);
-  }
-
-  function pickDailyEmoji(slotId, dateKey) {
-    const idx = hashSlotDay(slotId, dateKey) % EMOJI_OPTIONS.length;
-    return EMOJI_OPTIONS[idx];
-  }
-
   function ensureSiteAccess() {
     try {
       if (sessionStorage.getItem(SITE_ACCESS_SESSION_KEY) === "1") return true;
@@ -1103,21 +1451,6 @@
       }
       alert("密碼錯誤，請再試一次。");
     }
-  }
-
-  function syncDailyEmojiSlot(slotId, emoji) {
-    const today = todayDateKey();
-    let pack = null;
-    try {
-      pack = JSON.parse(localStorage.getItem(EMOJI_DAY_STORAGE_KEY));
-    } catch (e) {
-      pack = null;
-    }
-    if (!pack || pack.date !== today || !Array.isArray(pack.emojis)) {
-      return;
-    }
-    pack.emojis[slotId - 1] = emoji;
-    localStorage.setItem(EMOJI_DAY_STORAGE_KEY, JSON.stringify(pack));
   }
 
   function loadGroups() {
@@ -1172,6 +1505,61 @@
 
   function formatScoreDelta(delta) {
     return (delta > 0 ? "+" : "") + delta + "分";
+  }
+
+  function captureScoreUndoSnapshot() {
+    return {
+      scores: slots.map(function (s) {
+        return { id: s.id, score: s.score };
+      }),
+      todayScore: getTodayClassScore(),
+      scoreKingSession: scoreKingMission.active ? scoreKingMission.sessionScore : null,
+    };
+  }
+
+  function pushScoreUndoSnapshot() {
+    scoreUndoStack.push(captureScoreUndoSnapshot());
+    if (scoreUndoStack.length > SCORE_UNDO_MAX) {
+      scoreUndoStack.shift();
+    }
+    refreshScoreUndoButton();
+  }
+
+  function applyScoreUndoSnapshot(snapshot) {
+    snapshot.scores.forEach(function (entry) {
+      const s = getSlotById(entry.id);
+      if (s) s.score = entry.score;
+    });
+    const pack = loadDailyScoreLog();
+    pack.todayScore =
+      typeof snapshot.todayScore === "number" ? Math.max(0, snapshot.todayScore) : 0;
+    saveDailyScoreLog(pack);
+    dailyScorePack = pack;
+    if (snapshot.scoreKingSession !== null && scoreKingMission.active) {
+      scoreKingMission.sessionScore = snapshot.scoreKingSession;
+      updateMissionScoreHud();
+    }
+    saveSlots();
+    renderAll();
+    updateClassProgress();
+  }
+
+  function undoLastScoreAction() {
+    if (!teacherMode) return;
+    if (!scoreUndoStack.length) {
+      alert("沒有可復原的加減分行動。");
+      return;
+    }
+    const snapshot = scoreUndoStack.pop();
+    applyScoreUndoSnapshot(snapshot);
+    refreshScoreUndoButton();
+  }
+
+  function refreshScoreUndoButton() {
+    const btn = document.getElementById("btn-score-undo");
+    if (!btn) return;
+    btn.hidden = !teacherMode;
+    btn.disabled = scoreUndoStack.length === 0;
   }
 
   function showScoreToast(slot, delta) {
@@ -1249,13 +1637,21 @@
     const inlineLabel = document.getElementById("bulk-score-inline-label");
     if (inline) inline.hidden = !showBulkScore;
     if (inlineLabel && showBulkScore) {
-      inlineLabel.textContent = "已揀選 " + count + " 人，點擊加分：";
+      inlineLabel.textContent =
+        "已揀選 " +
+        count +
+        " 人" +
+        (teacherMode ? "，可加分或減分：" : "，點擊加分：");
     }
 
     const bar = document.getElementById("bulk-score-bar");
     if (bar) bar.hidden = true;
 
+    const minusSection = document.getElementById("bulk-score-minus-section");
+    if (minusSection) minusSection.hidden = !teacherMode || !showBulkScore;
+
     document.body.classList.toggle("bulk-pick-active", bulkPickActive);
+    refreshScoreUndoButton();
     slots.forEach(renderSlotElement);
   }
 
@@ -1346,7 +1742,9 @@
     if (!toast || !textEl) return;
 
     textEl.textContent =
-      "已為 " + count + " 位學生各加" + formatScoreDelta(delta) + "！";
+      delta > 0
+        ? "已為 " + count + " 位學生各加" + formatScoreDelta(delta) + "！"
+        : "已為 " + count + " 位學生各減" + Math.abs(delta) + "分！";
 
     if (scoreToastTimeoutId !== null) {
       clearTimeout(scoreToastTimeoutId);
@@ -1383,11 +1781,14 @@
     normalizeBulkSelectedIds();
     if (!bulkSelectedIds.length || !delta) return;
 
+    pushScoreUndoSnapshot();
+
     let applied = 0;
     bulkSelectedIds.forEach(function (id) {
       const s = getSlotById(id);
       if (s) {
         s.score = clampScore(s.score + delta);
+        applyScoreReaction(id, delta);
         applied += 1;
       }
     });
@@ -1397,6 +1798,9 @@
       return;
     }
 
+    if (delta !== 0) {
+      recordDailyScoreChange(delta * applied);
+    }
     saveSlots();
     bulkSuccessIds = bulkSelectedIds.slice();
     if (bulkSuccessTimerId !== null) {
@@ -1428,6 +1832,23 @@
       return;
     }
     applyBulkQuickScore(defaultDelta);
+  }
+
+  function applyBulkCustomScore(sign) {
+    if (!bulkSelectedIds.length) {
+      cancelBulkPick();
+      return;
+    }
+    const inputId = sign > 0 ? "bulk-score-add-input" : "bulk-score-sub-input";
+    const inputEl = document.getElementById(inputId);
+    const raw = inputEl ? String(inputEl.value).trim() : "";
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n <= 0 || n > 99) {
+      alert("請輸入 1～99 的正整數。");
+      return;
+    }
+    if (inputEl) inputEl.value = "";
+    applyBulkQuickScore(sign > 0 ? n : -n);
   }
 
   function initBulkUiBindings() {
@@ -1514,12 +1935,33 @@
       "</div>" +
       '<div id="bulk-score-inline" class="group-score-panel__bulk-score" hidden>' +
       '<p id="bulk-score-inline-label" class="group-score-panel__bulk-score-label">已揀選 0 人</p>' +
-      '<div id="bulk-score-inline-btns" class="group-score-panel__bulk-btns">' +
+      '<div class="group-score-panel__bulk-row">' +
+      '<span class="group-score-panel__bulk-row-label">加分</span>' +
+      '<div class="group-score-panel__bulk-btns">' +
       '<button type="button" class="bulk-score-quick-btn" data-bulk-delta="1">+1</button>' +
       '<button type="button" class="bulk-score-quick-btn" data-bulk-delta="2">+2</button>' +
       '<button type="button" class="bulk-score-quick-btn" data-bulk-delta="3">+3</button>' +
       '<button type="button" class="bulk-score-quick-btn" data-bulk-delta="4">+4</button>' +
       '<button type="button" class="bulk-score-quick-btn" data-bulk-delta="5">+5</button>' +
+      "</div>" +
+      '<div class="group-score-panel__bulk-custom">' +
+      '<input id="bulk-score-add-input" class="group-score-panel__bulk-custom-input" type="number" min="1" max="99" placeholder="分數" aria-label="自訂加分" />' +
+      '<button type="button" id="btn-bulk-score-add-custom" class="bulk-score-custom-btn bulk-score-custom-btn--add">套用加分</button>' +
+      "</div>" +
+      "</div>" +
+      '<div id="bulk-score-minus-section" class="group-score-panel__bulk-row" hidden>' +
+      '<span class="group-score-panel__bulk-row-label">減分</span>' +
+      '<div class="group-score-panel__bulk-btns">' +
+      '<button type="button" class="bulk-score-quick-btn bulk-score-quick-btn--minus" data-bulk-delta="-1">-1</button>' +
+      '<button type="button" class="bulk-score-quick-btn bulk-score-quick-btn--minus" data-bulk-delta="-2">-2</button>' +
+      '<button type="button" class="bulk-score-quick-btn bulk-score-quick-btn--minus" data-bulk-delta="-3">-3</button>' +
+      '<button type="button" class="bulk-score-quick-btn bulk-score-quick-btn--minus" data-bulk-delta="-4">-4</button>' +
+      '<button type="button" class="bulk-score-quick-btn bulk-score-quick-btn--minus" data-bulk-delta="-5">-5</button>' +
+      "</div>" +
+      '<div class="group-score-panel__bulk-custom">' +
+      '<input id="bulk-score-sub-input" class="group-score-panel__bulk-custom-input" type="number" min="1" max="99" placeholder="分數" aria-label="自訂減分" />' +
+      '<button type="button" id="btn-bulk-score-sub-custom" class="bulk-score-custom-btn bulk-score-custom-btn--sub">套用減分</button>' +
+      "</div>" +
       "</div>" +
       '<button type="button" id="btn-bulk-pick-cancel" class="group-score-panel__bulk-cancel">取消揀選</button>' +
       "</div>" +
@@ -1536,11 +1978,47 @@
         ev.preventDefault();
         ev.stopPropagation();
         const delta = parseInt(btn.getAttribute("data-bulk-delta"), 10);
-        if (!Number.isNaN(delta)) {
+        if (!Number.isNaN(delta) && delta !== 0) {
           onBulkScoreAction(delta);
         }
       });
     });
+
+    const btnBulkAddCustom = document.getElementById("btn-bulk-score-add-custom");
+    if (btnBulkAddCustom) {
+      btnBulkAddCustom.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        applyBulkCustomScore(1);
+      });
+    }
+    const btnBulkSubCustom = document.getElementById("btn-bulk-score-sub-custom");
+    if (btnBulkSubCustom) {
+      btnBulkSubCustom.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!teacherMode) return;
+        applyBulkCustomScore(-1);
+      });
+    }
+    const bulkAddInput = document.getElementById("bulk-score-add-input");
+    if (bulkAddInput) {
+      bulkAddInput.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          applyBulkCustomScore(1);
+        }
+      });
+    }
+    const bulkSubInput = document.getElementById("bulk-score-sub-input");
+    if (bulkSubInput) {
+      bulkSubInput.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          if (teacherMode) applyBulkCustomScore(-1);
+        }
+      });
+    }
 
     document.getElementById("btn-group-manage").addEventListener("click", function () {
       if (!teacherMode && !ensureTeacherModeOn()) return;
@@ -1775,10 +2253,19 @@
 
   function applyGroupScoreDelta(group, delta) {
     if (!group || !delta) return;
+    pushScoreUndoSnapshot();
+    let memberCount = 0;
     group.memberIds.forEach(function (id) {
       const s = getSlotById(id);
-      if (s) s.score = clampScore(s.score + delta);
+      if (s) {
+        s.score = clampScore(s.score + delta);
+        applyScoreReaction(id, delta);
+        memberCount += 1;
+      }
     });
+    if (memberCount > 0 && delta !== 0) {
+      recordDailyScoreChange(delta * memberCount);
+    }
     saveSlots();
     renderAll();
     playScoreDing();
@@ -1828,41 +2315,6 @@
     if (!group || !group.memberIds.length) return;
     activeGroupScoreMenuId = null;
     applyGroupScoreDelta(group, delta);
-  }
-
-  function applyDailyEmojiStates() {
-    const today = todayDateKey();
-    let pack = null;
-    try {
-      pack = JSON.parse(localStorage.getItem(EMOJI_DAY_STORAGE_KEY));
-    } catch (e) {
-      pack = null;
-    }
-
-    if (
-      pack &&
-      pack.date === today &&
-      Array.isArray(pack.emojis) &&
-      pack.emojis.length === SLOT_COUNT
-    ) {
-      slots.forEach(function (s) {
-        s.emoji = pack.emojis[s.id - 1] || pickDailyEmoji(s.id, today);
-      });
-      return;
-    }
-
-    const emojis = [];
-    for (let id = 1; id <= SLOT_COUNT; id++) {
-      emojis.push(pickDailyEmoji(id, today));
-    }
-    slots.forEach(function (s) {
-      s.emoji = emojis[s.id - 1];
-    });
-    localStorage.setItem(
-      EMOJI_DAY_STORAGE_KEY,
-      JSON.stringify({ date: today, emojis: emojis })
-    );
-    saveSlots();
   }
 
   function beastDisplayName(slot) {
@@ -1974,9 +2426,54 @@
     const modal = document.getElementById("lucky-result-modal");
     const bodyEl = document.getElementById("lucky-modal-body");
     if (bodyEl) bodyEl.innerHTML = "";
+    luckyDrawWinnerIds = [];
     if (modal) modal.hidden = true;
     document.body.classList.remove("lucky-modal-open");
     clearLuckyDrawVisuals();
+  }
+
+  function applyLuckyWinnerScore(delta) {
+    if (!luckyDrawWinnerIds.length || !delta) return;
+
+    pushScoreUndoSnapshot();
+
+    let applied = 0;
+    luckyDrawWinnerIds.forEach(function (id) {
+      const slot = getSlotById(id);
+      if (!slot) return;
+      slot.score = clampScore(slot.score + delta);
+      applyScoreReaction(id, delta);
+      applied += 1;
+    });
+
+    if (!applied) return;
+
+    recordDailyScoreChange(delta * applied);
+    saveSlots();
+    luckyDrawWinnerIds.forEach(function (id) {
+      const slot = getSlotById(id);
+      if (slot) renderSlotElement(slot);
+    });
+    playScoreDing();
+
+    const first = getSlotById(luckyDrawWinnerIds[0]);
+    if (first) {
+      if (luckyDrawWinnerIds.length === 1) {
+        showScoreToast(first, delta);
+      } else {
+        showBulkScoreToast(applied, delta);
+      }
+    }
+  }
+
+  function initLuckyModalScoreButtons() {
+    document.querySelectorAll(".lucky-score-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const delta = parseInt(btn.dataset.luckyDelta, 10);
+        if (!Number.isFinite(delta) || delta <= 0) return;
+        applyLuckyWinnerScore(delta);
+      });
+    });
   }
 
   function finishLuckyDraw(count) {
@@ -2071,9 +2568,49 @@
     return (min * 60 + sec) * 1000;
   }
 
+  function applyTimerDisplayState(display, text, urgent) {
+    if (!display) return;
+    display.textContent = text;
+    display.classList.toggle("is-urgent", !!urgent);
+  }
+
+  function syncTimerExpandedModeLabel() {
+    const modeEl = document.getElementById("timer-expanded-mode");
+    if (!modeEl) return;
+    modeEl.textContent = timerMode === "countdown" ? "倒計時" : "正計時";
+  }
+
+  function expandTimerDisplay() {
+    const modal = document.getElementById("timer-expanded-modal");
+    if (!modal) return;
+    timerExpanded = true;
+    modal.hidden = false;
+    document.body.classList.add("timer-expanded-open");
+    syncTimerExpandedModeLabel();
+    updateTimerDisplay();
+    if (timerAlarmActive) {
+      const alarmModal = document.getElementById("timer-alarm-modal");
+      if (alarmModal) alarmModal.hidden = true;
+      document.body.classList.remove("timer-alarm-open");
+    }
+    syncTimerExpandedAlarmButton();
+  }
+
+  function shrinkTimerDisplay() {
+    const modal = document.getElementById("timer-expanded-modal");
+    timerExpanded = false;
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("timer-expanded-open");
+    syncTimerExpandedAlarmButton();
+    if (timerAlarmActive) {
+      showTimerAlarmModal();
+    }
+  }
+
   function updateTimerDisplay() {
     const display = document.getElementById("timer-display");
-    if (!display) return;
+    const expandedDisplay = document.getElementById("timer-display-expanded");
+    if (!display && !expandedDisplay) return;
 
     let ms = 0;
     if (timerMode === "stopwatch") {
@@ -2081,8 +2618,9 @@
       if (timerRunning) {
         ms += Date.now() - stopwatchStartTs;
       }
-      display.textContent = formatTimerMs(ms, ms >= 3600000);
-      display.classList.remove("is-urgent");
+      const text = formatTimerMs(ms, ms >= 3600000);
+      applyTimerDisplayState(display, text, false);
+      applyTimerDisplayState(expandedDisplay, text, false);
       return;
     }
 
@@ -2090,10 +2628,10 @@
     if (timerRunning) {
       ms = Math.max(0, countdownEndTs - Date.now());
     }
-    display.textContent = formatTimerMs(ms, false);
-
+    const text = formatTimerMs(ms, false);
     const urgent = timerRunning && ms > 0 && ms <= 10000;
-    display.classList.toggle("is-urgent", urgent);
+    applyTimerDisplayState(display, text, urgent);
+    applyTimerDisplayState(expandedDisplay, text, urgent);
 
     checkCountdownMinuteCues(ms);
 
@@ -2105,8 +2643,8 @@
         timerIntervalId = null;
       }
       countdownRemainingMs = 0;
-      display.textContent = "00:00";
-      display.classList.remove("is-urgent");
+      applyTimerDisplayState(display, "00:00", false);
+      applyTimerDisplayState(expandedDisplay, "00:00", false);
       void startTimerAlarmLoop();
     }
   }
@@ -2134,6 +2672,7 @@
         stopwatchStartTs = Date.now();
         timerRunning = true;
         startTimerLoop();
+        expandTimerDisplay();
       }
       return;
     }
@@ -2149,6 +2688,7 @@
       countdownEndTs = Date.now() + countdownRemainingMs;
       timerRunning = true;
       startTimerLoop();
+      expandTimerDisplay();
     }
   }
 
@@ -2207,6 +2747,7 @@
     } else {
       stopwatchElapsedMs = 0;
     }
+    syncTimerExpandedModeLabel();
     updateTimerDisplay();
   }
 
@@ -2255,6 +2796,627 @@
     }
   }
 
+  function pickRandomDailyMission() {
+    const idx = Math.floor(Math.random() * DAILY_MISSIONS.length);
+    return DAILY_MISSIONS[idx];
+  }
+
+  function getMissionRewardText(mission) {
+    return (mission && mission.reward) || MISSION_DEFAULT_REWARD;
+  }
+
+  function resetActiveDailyMissionForRedraw() {
+    closeDailyMissionModal();
+    hideMissionReminder();
+    if (scoreKingMission.active) {
+      scoreKingMission.active = false;
+      scoreKingMission.sessionScore = 0;
+      hideMissionScoreHud();
+    }
+  }
+
+  function confirmRedrawDailyMission() {
+    return new Promise(function (resolve) {
+      const modal = document.getElementById("mission-redraw-confirm-modal");
+      const yesBtn = document.getElementById("btn-mission-redraw-yes");
+      const noBtn = document.getElementById("btn-mission-redraw-no");
+      if (!modal || !yesBtn || !noBtn) {
+        resolve(window.confirm("是否要重新抽取任務？"));
+        return;
+      }
+
+      function finish(ok) {
+        modal.hidden = true;
+        document.body.classList.remove("mission-redraw-confirm-open");
+        yesBtn.removeEventListener("click", onYes);
+        noBtn.removeEventListener("click", onNo);
+        modal.removeEventListener("click", onBackdrop);
+        resolve(ok);
+      }
+
+      function onYes() {
+        finish(true);
+      }
+
+      function onNo() {
+        finish(false);
+      }
+
+      function onBackdrop(ev) {
+        if (ev.target === modal) finish(false);
+      }
+
+      modal.hidden = false;
+      document.body.classList.add("mission-redraw-confirm-open");
+      yesBtn.addEventListener("click", onYes);
+      noBtn.addEventListener("click", onNo);
+      modal.addEventListener("click", onBackdrop);
+    });
+  }
+
+  function syncMissionHudLayout() {
+    document.body.classList.toggle("mission-score-visible", scoreKingMission.active);
+  }
+
+  function getMissionFocusHtml(mission) {
+    const reward = getMissionRewardText(mission);
+    return (
+      '<span class="daily-mission-modal__desc-text">' +
+      mission.desc +
+      '</span><span class="daily-mission-modal__reward-inline">' +
+      reward +
+      "</span>"
+    );
+  }
+
+  function fillMissionContent(target, mission) {
+    if (target === "daily") {
+      const nameEl = document.getElementById("daily-mission-name");
+      const descEl = document.getElementById("daily-mission-desc");
+      if (nameEl) nameEl.textContent = mission.title;
+      if (descEl) descEl.innerHTML = getMissionFocusHtml(mission);
+      return;
+    }
+    const titleEl = document.getElementById("mission-reminder-title");
+    const reminderDesc = document.getElementById("mission-reminder-desc");
+    if (titleEl) titleEl.textContent = mission.title;
+    if (reminderDesc) reminderDesc.innerHTML = getMissionFocusHtml(mission);
+  }
+
+  function showMissionReminder(mission) {
+    currentDailyMission = mission;
+    missionReminderVisible = true;
+    fillMissionContent("reminder", mission);
+    const hud = document.getElementById("mission-reminder-hud");
+    if (hud) hud.hidden = false;
+    syncMissionHudLayout();
+  }
+
+  function hideMissionReminder() {
+    missionReminderVisible = false;
+    currentDailyMission = null;
+    const hud = document.getElementById("mission-reminder-hud");
+    if (hud) hud.hidden = true;
+    syncMissionHudLayout();
+  }
+
+  function closeMissionReminderManual() {
+    hideMissionReminder();
+  }
+
+  function beginClassWithMission(mission) {
+    closeDailyMissionModal();
+    showMissionReminder(mission);
+    if (mission.type === "scoreKing") {
+      startScoreKingMission();
+    }
+  }
+
+  function playMissionDrawSound() {
+    if (FREESOUND_TOKEN) {
+      void playFreesoundById(SOUND_ID_MISSION_DRAW, 0.88);
+      return;
+    }
+    playLuckyDrawPulse();
+  }
+
+  function notifyMissionScoreGain(delta) {
+    if (!scoreKingMission.active || !Number.isFinite(delta) || delta <= 0) return;
+    scoreKingMission.sessionScore += Math.floor(delta);
+    updateMissionScoreHud();
+  }
+
+  function updateMissionScoreHud() {
+    const hud = document.getElementById("mission-score-hud");
+    const valueEl = document.getElementById("mission-score-hud-value");
+    const barEl = document.getElementById("mission-score-hud-bar");
+    const track = document.querySelector(".mission-score-hud__track");
+    const score = scoreKingMission.sessionScore;
+    const pct = Math.min(100, (score / MISSION_SCORE_GOAL) * 100);
+
+    if (valueEl) valueEl.textContent = String(score);
+    if (barEl) barEl.style.width = pct + "%";
+    if (track) {
+      track.setAttribute("aria-valuenow", String(Math.min(score, MISSION_SCORE_GOAL)));
+      track.setAttribute("aria-valuemax", String(MISSION_SCORE_GOAL));
+    }
+  }
+
+  function showMissionScoreHud() {
+    const hud = document.getElementById("mission-score-hud");
+    if (hud) hud.hidden = false;
+    updateMissionScoreHud();
+    syncMissionHudLayout();
+  }
+
+  function hideMissionScoreHud() {
+    const hud = document.getElementById("mission-score-hud");
+    if (hud) hud.hidden = true;
+    syncMissionHudLayout();
+  }
+
+  function closeDailyMissionModal() {
+    const modal = document.getElementById("daily-mission-modal");
+    const rollEl = document.getElementById("daily-mission-roll");
+    if (modal) modal.hidden = true;
+    if (rollEl) rollEl.hidden = true;
+    document.body.classList.remove("daily-mission-open");
+  }
+
+  function openDailyMissionModal() {
+    const modal = document.getElementById("daily-mission-modal");
+    if (modal) modal.hidden = false;
+    document.body.classList.add("daily-mission-open");
+  }
+
+  function renderDailyMissionReveal(mission) {
+    const actionsEl = document.getElementById("daily-mission-actions");
+    const rollEl = document.getElementById("daily-mission-roll");
+    if (!actionsEl) return;
+
+    if (rollEl) rollEl.hidden = true;
+    fillMissionContent("daily", mission);
+    dailyMissionDrawCommitted = true;
+    actionsEl.innerHTML = "";
+
+    if (mission.type === "scoreKing") {
+      const startBtn = document.createElement("button");
+      startBtn.type = "button";
+      startBtn.className = "tools-btn tools-btn--mission-start";
+      startBtn.textContent = "⚔️ 開始：誰是得分王";
+      startBtn.addEventListener("click", function () {
+        beginClassWithMission(mission);
+      });
+      actionsEl.appendChild(startBtn);
+      return;
+    }
+
+    const startBtn = document.createElement("button");
+    startBtn.type = "button";
+    startBtn.className = "tools-btn tools-btn--class-start";
+    startBtn.textContent = "課堂開始！";
+    startBtn.addEventListener("click", function () {
+      beginClassWithMission(mission);
+    });
+    actionsEl.appendChild(startBtn);
+  }
+
+  function runDailyMissionRollAnimation(done) {
+    const rollEl = document.getElementById("daily-mission-roll");
+    const nameEl = document.getElementById("daily-mission-name");
+    const descEl = document.getElementById("daily-mission-desc");
+    const actionsEl = document.getElementById("daily-mission-actions");
+    if (!rollEl) {
+      done();
+      return;
+    }
+
+    const card = rollEl.closest(".daily-mission-modal__card");
+    if (card) card.classList.add("is-rolling-reveal");
+
+    if (nameEl) nameEl.textContent = "";
+    if (descEl) descEl.innerHTML = "";
+    if (actionsEl) actionsEl.innerHTML = "";
+    rollEl.hidden = false;
+
+    const started = Date.now();
+    const tick = function () {
+      const sample = DAILY_MISSIONS[Math.floor(Math.random() * DAILY_MISSIONS.length)];
+      rollEl.textContent = "🎲 抽取中：「" + sample.title + "」…";
+      if (Date.now() - started >= MISSION_ROLL_MS) {
+        if (card) card.classList.remove("is-rolling-reveal");
+        done();
+        return;
+      }
+      setTimeout(tick, 85);
+    };
+    tick();
+  }
+
+  function drawDailyMission() {
+    if (dailyMissionDrawRunning) return;
+
+    if (dailyMissionDrawCommitted) {
+      confirmRedrawDailyMission().then(function (ok) {
+        if (!ok) return;
+        resetActiveDailyMissionForRedraw();
+        runDailyMissionDraw();
+      });
+      return;
+    }
+
+    runDailyMissionDraw();
+  }
+
+  function runDailyMissionDraw() {
+    if (dailyMissionDrawRunning) return;
+    dailyMissionDrawRunning = true;
+
+    const drawBtn = document.getElementById("btn-daily-mission-draw");
+    if (drawBtn) drawBtn.classList.add("is-rolling");
+
+    playMissionDrawSound();
+    openDailyMissionModal();
+    runDailyMissionRollAnimation(function () {
+      const mission = pickRandomDailyMission();
+      renderDailyMissionReveal(mission);
+      if (drawBtn) drawBtn.classList.remove("is-rolling");
+      dailyMissionDrawRunning = false;
+    });
+  }
+
+  function startScoreKingMission() {
+    scoreKingMission.active = true;
+    scoreKingMission.sessionScore = 0;
+    showMissionScoreHud();
+    updateMissionScoreHud();
+  }
+
+  function grantClassMissionBonus(bonus, options) {
+    const opts = options || {};
+    if (bonus) pushScoreUndoSnapshot();
+    slots.forEach(function (s) {
+      s.score = clampScore(s.score + bonus);
+      if (bonus !== 0) applyScoreReaction(s.id, bonus);
+    });
+    recordDailyScoreChange(bonus * SLOT_COUNT);
+    saveSlots();
+    renderAll();
+    if (opts.withFeedback && bonus) {
+      playScoreDing();
+      showBulkScoreToast(SLOT_COUNT, bonus);
+    }
+  }
+
+  function onMissionReminderGoalAchieved() {
+    if (!missionReminderVisible) return;
+    grantClassMissionBonus(MISSION_CLASS_BONUS, { withFeedback: true });
+    hideMissionReminder();
+  }
+
+  function playMissionEncourageSound() {
+    const ctx = getWebAudioContext();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(392, t);
+    osc.frequency.exponentialRampToValueAtTime(523.25, t + 0.35);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.22, t + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.6);
+  }
+
+  function playMissionSuccessSound() {
+    if (cheerAudioPlayer) {
+      cheerAudioPlayer.currentTime = 0;
+      void cheerAudioPlayer.play().catch(function () {});
+      return;
+    }
+    if (FREESOUND_TOKEN) {
+      void playFreesoundEffect("cheer");
+      return;
+    }
+    playLuckyDrawSound();
+  }
+
+  function stopMissionConfetti() {
+    if (missionConfettiTimerId !== null) {
+      clearInterval(missionConfettiTimerId);
+      missionConfettiTimerId = null;
+    }
+    const layer = document.getElementById("mission-confetti-layer");
+    if (layer) layer.innerHTML = "";
+  }
+
+  function launchMissionConfetti() {
+    const layer = document.getElementById("mission-confetti-layer");
+    if (!layer) return;
+    stopMissionConfetti();
+    const colors = ["#fde047", "#f97316", "#ec4899", "#38bdf8", "#a78bfa", "#4ade80"];
+    missionConfettiTimerId = setInterval(function () {
+      for (let i = 0; i < 6; i++) {
+        const piece = document.createElement("span");
+        piece.className = "mission-confetti-piece";
+        piece.style.left = Math.random() * 100 + "%";
+        piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+        piece.style.animationDuration = 2.2 + Math.random() * 1.8 + "s";
+        piece.style.animationDelay = Math.random() * 0.4 + "s";
+        layer.appendChild(piece);
+        setTimeout(function () {
+          piece.remove();
+        }, 4500);
+      }
+    }, 180);
+  }
+
+  function showMissionSuccessOutcome() {
+    const modal = document.getElementById("mission-success-modal");
+    if (!modal) return;
+    modal.hidden = false;
+    document.body.classList.add("mission-outcome-open");
+    launchMissionConfetti();
+    playMissionSuccessSound();
+  }
+
+  function closeMissionSuccessOutcome() {
+    const modal = document.getElementById("mission-success-modal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("mission-outcome-open");
+    stopMissionConfetti();
+  }
+
+  function showMissionEncourageOutcome(score) {
+    const modal = document.getElementById("mission-encourage-modal");
+    const textEl = document.getElementById("mission-encourage-text");
+    if (textEl) {
+      textEl.textContent =
+        "大家今天已經盡力了，累積戰力 " +
+        score +
+        " 分！下次的挑戰一定能成功！";
+    }
+    if (modal) modal.hidden = false;
+    document.body.classList.add("mission-outcome-open");
+    playMissionEncourageSound();
+  }
+
+  function closeMissionEncourageOutcome() {
+    const modal = document.getElementById("mission-encourage-modal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("mission-outcome-open");
+  }
+
+  function endScoreKingMission() {
+    if (!scoreKingMission.active) return;
+    const score = scoreKingMission.sessionScore;
+    scoreKingMission.active = false;
+    hideMissionScoreHud();
+
+    if (score >= MISSION_SCORE_GOAL) {
+      grantClassMissionBonus(MISSION_CLASS_BONUS);
+      showMissionSuccessOutcome();
+    } else {
+      showMissionEncourageOutcome(score);
+    }
+  }
+
+  function initDailyMissionModule() {
+    const drawBtn = document.getElementById("btn-daily-mission-draw");
+    const endBtn = document.getElementById("btn-mission-end");
+    const reminderClose = document.getElementById("btn-mission-reminder-close");
+    const goalAchievedBtn = document.getElementById("btn-mission-goal-achieved");
+    const successClose = document.getElementById("btn-mission-success-close");
+    const encourageClose = document.getElementById("btn-mission-encourage-close");
+    const missionModal = document.getElementById("daily-mission-modal");
+
+    if (drawBtn) drawBtn.addEventListener("click", drawDailyMission);
+    if (reminderClose) {
+      reminderClose.addEventListener("click", closeMissionReminderManual);
+    }
+    if (goalAchievedBtn) {
+      goalAchievedBtn.addEventListener("click", onMissionReminderGoalAchieved);
+    }
+    if (endBtn) endBtn.addEventListener("click", endScoreKingMission);
+    if (successClose) {
+      successClose.addEventListener("click", closeMissionSuccessOutcome);
+    }
+    if (encourageClose) {
+      encourageClose.addEventListener("click", closeMissionEncourageOutcome);
+    }
+    if (missionModal) {
+      missionModal.addEventListener("click", function (ev) {
+        if (ev.target === missionModal && !dailyMissionDrawRunning) {
+          closeDailyMissionModal();
+        }
+      });
+    }
+  }
+
+  function buildBackupArchiveObject() {
+    return {
+      version: BACKUP_ARCHIVE_VERSION,
+      exportedAt: Date.now(),
+      data: {
+        slots: localStorage.getItem(STORAGE_KEY),
+        groups: localStorage.getItem(GROUPS_STORAGE_KEY),
+        classProgress: localStorage.getItem(CLASS_PROGRESS_META_KEY),
+        dailyScore: localStorage.getItem(DAILY_SCORE_STORAGE_KEY),
+        timerMinuteCue: localStorage.getItem(TIMER_MINUTE_CUE_STORAGE_KEY),
+      },
+    };
+  }
+
+  function encodeUtf8ToBase64(str) {
+    return btoa(
+      encodeURIComponent(str).replace(/%([0-9A-F]{2})/gi, function (_, hex) {
+        return String.fromCharCode(parseInt(hex, 16));
+      })
+    );
+  }
+
+  function decodeBase64ToUtf8(b64) {
+    return decodeURIComponent(
+      atob(b64)
+        .split("")
+        .map(function (ch) {
+          return "%" + ("00" + ch.charCodeAt(0).toString(16)).slice(-2);
+        })
+        .join("")
+    );
+  }
+
+  function buildClassSaveCodeString() {
+    const payload = encodeUtf8ToBase64(JSON.stringify(buildBackupArchiveObject()));
+    return CLASS_SAVECODE_PREFIX + payload;
+  }
+
+  function parseClassSaveCodeString(raw) {
+    const trimmed = (raw || "").trim();
+    if (!trimmed) {
+      throw new Error("存檔碼為空，請貼上先前複製的內容。");
+    }
+    const payload = trimmed.indexOf(CLASS_SAVECODE_PREFIX) === 0
+      ? trimmed.slice(CLASS_SAVECODE_PREFIX.length)
+      : trimmed;
+    let archive;
+    try {
+      archive = JSON.parse(decodeBase64ToUtf8(payload));
+    } catch (e) {
+      throw new Error("存檔碼格式無效，請確認已完整貼上。");
+    }
+    if (!archive || typeof archive !== "object" || !archive.data) {
+      throw new Error("存檔碼內容不完整。");
+    }
+    return archive;
+  }
+
+  function applyBackupArchive(archive) {
+    const data = archive.data;
+    if (!data.slots) {
+      throw new Error("存檔碼缺少學生資料。");
+    }
+    const slotsParsed = JSON.parse(data.slots);
+    if (!slotsParsed.slots || slotsParsed.slots.length !== SLOT_COUNT) {
+      throw new Error("學生資料筆數不符（需 22 位）。");
+    }
+
+    localStorage.setItem(STORAGE_KEY, data.slots);
+    if (data.groups) {
+      localStorage.setItem(GROUPS_STORAGE_KEY, data.groups);
+    } else {
+      localStorage.removeItem(GROUPS_STORAGE_KEY);
+    }
+    if (data.classProgress) {
+      localStorage.setItem(CLASS_PROGRESS_META_KEY, data.classProgress);
+    } else {
+      localStorage.removeItem(CLASS_PROGRESS_META_KEY);
+    }
+    if (data.dailyScore) {
+      localStorage.setItem(DAILY_SCORE_STORAGE_KEY, data.dailyScore);
+    } else {
+      localStorage.removeItem(DAILY_SCORE_STORAGE_KEY);
+    }
+    if (data.timerMinuteCue) {
+      localStorage.setItem(TIMER_MINUTE_CUE_STORAGE_KEY, data.timerMinuteCue);
+    } else {
+      localStorage.removeItem(TIMER_MINUTE_CUE_STORAGE_KEY);
+    }
+
+    loadSlots();
+    loadGroups();
+    loadClassProgressMeta();
+    loadDailyScoreLog();
+    loadTimerMinuteCueSetting();
+    updateTimerMinuteCueButtonUI();
+    slots.forEach(function (s) {
+      if (s.id === 15) s.animal = "tiger";
+      if (typeof s.score !== "number") s.score = 0;
+      if (typeof s.lives !== "number") s.lives = LIVES_DEFAULT;
+      s.emoji = DEFAULT_EMOJI;
+    });
+    saveSlots();
+    renderAll();
+    ensureGroupPanel();
+    renderGroupButtons();
+    updateClassProgress();
+  }
+
+  function copyTextToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        const ok = document.execCommand("copy");
+        ta.remove();
+        if (ok) resolve();
+        else reject(new Error("copy failed"));
+      } catch (err) {
+        ta.remove();
+        reject(err);
+      }
+    });
+  }
+
+
+  function onCopyClassSaveCodeClick() {
+    if (!ensureTeacherModeOn()) return;
+    const code = buildClassSaveCodeString();
+    copyTextToClipboard(code)
+      .then(function () {
+        alert(
+          "全班存檔碼已複製到剪貼簿！\n請貼到記事本或傳給自己保存，日後可在此還原。"
+        );
+      })
+      .catch(function () {
+        prompt("無法自動複製，請手動全選並複製以下存檔碼：", code);
+      });
+  }
+
+  function onRestoreClassSaveCodeClick() {
+    if (!ensureTeacherModeOn()) return;
+    const input = document.getElementById("class-savecode-input");
+    const raw = input ? input.value : "";
+    let archive;
+    try {
+      archive = parseClassSaveCodeString(raw);
+    } catch (err) {
+      alert(err.message || "存檔碼無效。");
+      return;
+    }
+    const ok = confirm(
+      "還原將覆蓋目前瀏覽器中的全班分數、神獸與組別資料。\n確定要還原嗎？"
+    );
+    if (!ok) return;
+    try {
+      applyBackupArchive(archive);
+      if (input) input.value = "";
+      alert("全班資料已成功還原！");
+    } catch (err) {
+      alert(err.message || "還原失敗，請檢查存檔碼。");
+    }
+  }
+
+  function initDataBackupModule() {
+    const copyBtn = document.getElementById("btn-copy-class-savecode");
+    const restoreBtn = document.getElementById("btn-restore-class-savecode");
+
+    if (copyBtn) copyBtn.addEventListener("click", onCopyClassSaveCodeClick);
+    if (restoreBtn) restoreBtn.addEventListener("click", onRestoreClassSaveCodeClick);
+  }
+
   function initToolsSidebar() {
     const toggle = document.getElementById("btn-tools-toggle");
     const closeBtn = document.getElementById("btn-tools-close");
@@ -2270,6 +3432,7 @@
     if (overlay) overlay.addEventListener("click", closeToolsSidebar);
     if (luckyBtn) luckyBtn.addEventListener("click", startLuckyDraw);
     if (luckyModalClose) luckyModalClose.addEventListener("click", closeLuckyResultModal);
+    initLuckyModalScoreButtons();
 
     const luckyModal = document.getElementById("lucky-result-modal");
     if (luckyModal) {
@@ -2287,6 +3450,21 @@
     if (timerStartBtn) timerStartBtn.addEventListener("click", timerStart);
     if (timerPauseBtn) timerPauseBtn.addEventListener("click", timerPause);
     if (timerResetBtn) timerResetBtn.addEventListener("click", timerReset);
+
+    const timerShrinkBtn = document.getElementById("btn-timer-shrink");
+    const timerExpandedModal = document.getElementById("timer-expanded-modal");
+    if (timerShrinkBtn) timerShrinkBtn.addEventListener("click", shrinkTimerDisplay);
+    const timerExpandedAlarmClose = document.getElementById(
+      "btn-timer-expanded-alarm-close"
+    );
+    if (timerExpandedAlarmClose) {
+      timerExpandedAlarmClose.addEventListener("click", dismissTimerAlarmAndReturn);
+    }
+    if (timerExpandedModal) {
+      timerExpandedModal.addEventListener("click", function (ev) {
+        if (ev.target === timerExpandedModal) shrinkTimerDisplay();
+      });
+    }
 
     const minuteCueBtn = document.getElementById("btn-timer-minute-cue");
     if (minuteCueBtn) {
@@ -2312,10 +3490,11 @@
     loadTimerMinuteCueSetting();
     updateTimerMinuteCueButtonUI();
     setTimerMode("stopwatch");
+    initDailyMissionModule();
+    initDataBackupModule();
   }
 
   function deductSlotLife(slotId) {
-    if (!teacherMode && !ensureTeacherModeOn()) return;
     const slot = getSlotById(slotId);
     if (!slot || slot.lives <= 0) return;
 
@@ -2323,21 +3502,43 @@
     saveSlots();
     updateSlotLifeDisplay(slot);
     playLifeWarningSound();
+
+    if (slot.lives === 0) {
+      setSlotReactionEmoji(slotId, EMOJI_SLEEP);
+    } else {
+      setSlotReactionEmoji(slotId, EMOJI_SAD);
+    }
   }
 
-  function restoreSlotLife(slotId) {
-    if (!teacherMode && !ensureTeacherModeOn()) return;
+  function wakeUpSlot(slotId) {
     const slot = getSlotById(slotId);
     if (!slot || slot.lives > 0) return;
 
+    clearSlotEmojiTimer(slotId);
     slot.lives = LIVES_DEFAULT;
+    slot.emoji = DEFAULT_EMOJI;
     saveSlots();
-    updateSlotLifeDisplay(slot);
+    renderSlotElement(slot);
+  }
+
+  function bindSlotLivesEvents(livesEl, slotId) {
+    if (livesEl.dataset.livesBound === "1") return;
+    livesEl.dataset.livesBound = "1";
+    livesEl.addEventListener("click", function (ev) {
+      const heart = ev.target.closest(".slot__life-heart.is-full");
+      if (!heart) return;
+      ev.stopPropagation();
+      ev.preventDefault();
+      deductSlotLife(slotId);
+    });
   }
 
   function ensureSlotLifeHearts(livesEl, slotId) {
     const existing = livesEl.querySelectorAll(".slot__life-heart");
-    if (existing.length === LIVES_MAX) return existing;
+    if (existing.length === LIVES_MAX) {
+      bindSlotLivesEvents(livesEl, slotId);
+      return existing;
+    }
 
     livesEl.textContent = "";
     for (let i = 0; i < LIVES_MAX; i++) {
@@ -2347,17 +3548,17 @@
       heart.dataset.lifeIndex = String(i);
       heart.innerHTML =
         '<span class="slot__life-heart-icon" aria-hidden="true">♥</span>';
-      heart.addEventListener("click", function (ev) {
-        ev.stopPropagation();
-        if (!heart.classList.contains("is-full")) return;
-        deductSlotLife(slotId);
-      });
       livesEl.appendChild(heart);
     }
+    bindSlotLivesEvents(livesEl, slotId);
     return livesEl.querySelectorAll(".slot__life-heart");
   }
 
   function syncSlotLifeHeartStates(livesEl, slot) {
+    if (typeof slot.lives !== "number") {
+      slot.lives = LIVES_DEFAULT;
+    }
+
     const hearts = ensureSlotLifeHearts(livesEl, slot.id);
     hearts.forEach(function (heart, i) {
       const isFull = i < slot.lives;
@@ -2365,34 +3566,31 @@
       heart.classList.toggle("is-empty", !isFull);
       heart.hidden = false;
       heart.style.display = "";
+      heart.removeAttribute("disabled");
       heart.setAttribute(
         "aria-label",
         isFull
           ? "扣減生命值（目前 " + slot.lives + "）"
           : "已失去的生命值"
       );
-      heart.disabled = !teacherMode || !isFull;
     });
 
-    let restoreBtn = livesEl.querySelector(".slot__life-restore");
-    if (slot.lives === 0 && teacherMode) {
-      if (!restoreBtn) {
-        restoreBtn = document.createElement("button");
-        restoreBtn.type = "button";
-        restoreBtn.className = "slot__life-restore";
-        restoreBtn.textContent = "補血";
-        restoreBtn.setAttribute(
-          "aria-label",
-          "恢復生命值至 " + LIVES_DEFAULT
-        );
-        restoreBtn.addEventListener("click", function (ev) {
+    let wakeBtn = livesEl.querySelector(".slot__life-wakeup");
+    if (slot.lives === 0) {
+      if (!wakeBtn) {
+        wakeBtn = document.createElement("button");
+        wakeBtn.type = "button";
+        wakeBtn.className = "slot__life-wakeup";
+        wakeBtn.textContent = "睡醒";
+        wakeBtn.setAttribute("aria-label", "睡醒並恢復生命值");
+        wakeBtn.addEventListener("click", function (ev) {
           ev.stopPropagation();
-          restoreSlotLife(slot.id);
+          wakeUpSlot(slot.id);
         });
-        livesEl.appendChild(restoreBtn);
+        livesEl.appendChild(wakeBtn);
       }
-    } else if (restoreBtn) {
-      restoreBtn.remove();
+    } else if (wakeBtn) {
+      wakeBtn.remove();
     }
   }
 
@@ -2435,7 +3633,7 @@
         '<div class="slot__stage"></div>' +
         '<div class="slot__lives" aria-label="生命值"></div>' +
         '<div class="slot__footer">' +
-        '  <button type="button" class="slot__footer-part slot__footer-part--emoji" aria-label="狀態表情"></button>' +
+        '  <span class="slot__footer-part slot__footer-part--emoji" aria-label="狀態表情"></span>' +
         '  <div class="slot__footer-part slot__footer-part--name"></div>' +
         '  <button type="button" class="slot__footer-part slot__footer-part--score" aria-label="得分"></button>' +
         "</div>" +
@@ -2482,10 +3680,7 @@
 
     if (footerEmoji) {
       footerEmoji.textContent = slot.emoji || DEFAULT_EMOJI;
-      footerEmoji.onclick = function (ev) {
-        ev.stopPropagation();
-        onEmojiClick(slot.id);
-      };
+      footerEmoji.setAttribute("aria-label", "狀態表情");
     }
 
     if (footerName) {
@@ -2561,11 +3756,16 @@
 
   function applyQuickScore(slotId, delta) {
     const slot = getSlotById(slotId);
-    if (!slot) return;
+    if (!slot || !delta) return;
+    pushScoreUndoSnapshot();
     slot.score = clampScore(slot.score + delta);
+    if (delta !== 0) {
+      recordDailyScoreChange(delta);
+    }
     saveSlots();
     activeScoreMenuSlotId = null;
     renderSlotElement(slot);
+    applyScoreReaction(slotId, delta);
     playScoreDing();
     showScoreToast(slot, delta);
   }
@@ -2598,60 +3798,46 @@
     document.body.classList.toggle("teacher-mode-active", teacherMode);
     if (btnTeacherMode) {
       btnTeacherMode.classList.toggle("is-active", teacherMode);
-      btnTeacherMode.title = teacherMode ? "教師模式（已開啟）" : "教師模式";
+      const labelEl = document.getElementById("teacher-mode-btn-label");
+      if (labelEl) {
+        labelEl.textContent = teacherMode ? "教師模式-開" : "教師模式-關";
+      }
+      btnTeacherMode.title = teacherMode
+        ? "連擊兩下關閉教師模式"
+        : "連擊兩下開啟教師模式";
+      btnTeacherMode.setAttribute(
+        "aria-label",
+        teacherMode ? "教師模式已開啟，連擊兩下關閉" : "教師模式已關閉，連擊兩下開啟"
+      );
     }
+    updateBulkPickUI();
+    refreshScoreUndoButton();
     renderAll();
   }
 
   function ensureTeacherModeOn() {
     if (teacherMode) return true;
-    const pwd = prompt("請輸入教師密碼：");
-    if (pwd === null) return false;
-    if (pwd !== TEACHER_PASSWORD) {
-      alert("密碼錯誤。");
-      return false;
-    }
-    teacherMode = true;
-    refreshTeacherModeUI();
-    alert(
-      "教師模式已開啟：可使用 ⚡ 強制孵化、🥚 變回蛋，以及表情／分數管理。"
-    );
-    return true;
+    alert("請連擊兩下左上角「教師模式」按鈕以開啟。");
+    return false;
   }
 
-  function toggleTeacherMode() {
-    if (!teacherMode) {
-      ensureTeacherModeOn();
-      return;
-    }
+  function openTeacherMode() {
+    if (teacherMode) return;
+    teacherMode = true;
+    refreshTeacherModeUI();
+  }
+
+  function closeTeacherMode() {
+    if (!teacherMode) return;
     teacherMode = false;
     closeAllQuickScoreMenus();
     refreshTeacherModeUI();
-    alert("教師模式已關閉。");
   }
 
-  function onEmojiClick(slotId) {
-    if (!teacherMode && !ensureTeacherModeOn()) return;
-    const slot = getSlotById(slotId);
-    if (!slot) return;
-
-    const menu =
-      "請選擇表情編號：\n" +
-      EMOJI_OPTIONS.map(function (e, idx) {
-        return idx + 1 + " = " + e;
-      }).join("\n");
-
-    const input = prompt(menu, "2");
-    if (input === null) return;
-    const n = parseInt(input, 10);
-    if (Number.isNaN(n) || n < 1 || n > EMOJI_OPTIONS.length) {
-      alert("請輸入 1～" + EMOJI_OPTIONS.length + " 之間的數字。");
-      return;
-    }
-    slot.emoji = EMOJI_OPTIONS[n - 1];
-    syncDailyEmojiSlot(slotId, slot.emoji);
-    saveSlots();
-    renderSlotElement(slot);
+  function onTeacherModeButtonDblClick(ev) {
+    ev.preventDefault();
+    if (teacherMode) closeTeacherMode();
+    else openTeacherMode();
   }
 
   function onScoreClick(slotId) {
@@ -2673,7 +3859,7 @@
       if (!raw) return;
 
       const oldScore = slot.score;
-      let delta = 0;
+      let newScore = oldScore;
 
       if (/^[+-]/.test(raw)) {
         const change = parseInt(raw, 10);
@@ -2682,26 +3868,30 @@
           return;
         }
         if (change === 0) return;
-        slot.score = clampScore(slot.score + change);
-        delta = slot.score - oldScore;
+        newScore = clampScore(oldScore + change);
       } else {
         const target = parseInt(raw, 10);
         if (Number.isNaN(target)) {
           alert("請輸入數字。");
           return;
         }
-        slot.score = clampScore(target);
-        delta = slot.score - oldScore;
+        newScore = clampScore(target);
       }
 
+      const delta = newScore - oldScore;
       if (delta === 0) {
         saveSlots();
         renderSlotElement(slot);
         return;
       }
 
+      pushScoreUndoSnapshot();
+      slot.score = newScore;
+
+      recordDailyScoreChange(delta);
       saveSlots();
       renderSlotElement(slot);
+      applyScoreReaction(slotId, delta);
       playScoreDing();
       showScoreToast(slot, delta);
       return;
@@ -2868,21 +4058,39 @@
     showFileProtocolBanner();
     loadSlots();
     loadGroups();
+    loadClassProgressMeta();
+    loadDailyScoreLog();
+    initClassProgressUI();
 
     slots.forEach(function (s) {
       if (s.id === 15) {
         s.animal = "tiger";
       }
       if (typeof s.score !== "number") s.score = 0;
+      if (typeof s.lives !== "number") s.lives = LIVES_DEFAULT;
+      s.emoji = DEFAULT_EMOJI;
     });
-    applyDailyEmojiStates();
     saveSlots();
     preloadFreesoundEffects();
     initToolsSidebar();
 
     if (btnTeacherMode) {
-      btnTeacherMode.addEventListener("click", toggleTeacherMode);
+      btnTeacherMode.addEventListener("dblclick", onTeacherModeButtonDblClick);
     }
+
+    const btnScoreUndo = document.getElementById("btn-score-undo");
+    if (btnScoreUndo) {
+      btnScoreUndo.addEventListener("click", undoLastScoreAction);
+    }
+
+    document.addEventListener("keydown", function (ev) {
+      if (!teacherMode) return;
+      const key = ev.key ? ev.key.toLowerCase() : "";
+      if ((ev.ctrlKey || ev.metaKey) && key === "z" && !ev.shiftKey) {
+        ev.preventDefault();
+        undoLastScoreAction();
+      }
+    });
     document.addEventListener("click", function (ev) {
       if (activeScoreMenuSlotId !== null) {
         const current = document.querySelector(
@@ -2910,6 +4118,8 @@
     ensureGroupPanel();
     initBulkUiBindings();
     renderGroupButtons();
+    updateClassProgress();
+    refreshScoreUndoButton();
     startAnimationCycle();
   }
 
