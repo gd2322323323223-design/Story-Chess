@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>學生加分紀錄表</title>
-  <link rel="stylesheet" href="style.css?v=55" />
+  <title>欣賞園地</title>
+  <link rel="stylesheet" href="style.css?v=63" />
   <script
     type="module"
     src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"
@@ -44,7 +44,7 @@
     </div>
   </div>
 
-  <div class="build-version-badge" aria-label="版本號">v55</div>
+  <div class="build-version-badge" aria-label="版本號">v63</div>
 
   <div
     id="class-code-modal"
@@ -123,6 +123,7 @@
       </button>
     </header>
 
+    <div class="tools-sidebar__scroll">
     <section class="tools-panel tools-panel--mission" aria-labelledby="tools-mission-title">
       <h3 id="tools-mission-title" class="tools-panel__title">功能 1：今日加分任務</h3>
       <div class="tools-panel__actions">
@@ -137,7 +138,7 @@
     </section>
 
     <section class="tools-panel tools-panel--lucky" aria-labelledby="tools-lucky-title">
-      <h3 id="tools-lucky-title" class="tools-panel__title">功能 2：幸運抽</h3>
+      <h3 id="tools-lucky-title" class="tools-panel__title">功能 2：幸運抽籤</h3>
       <label class="tools-field" for="lucky-count">
         <span>挑選人數（1～22）</span>
         <input
@@ -210,8 +211,18 @@
       </div>
     </section>
 
-    <section class="tools-panel tools-panel--backup" aria-labelledby="tools-backup-title">
-      <h3 id="tools-backup-title" class="tools-panel__title">功能 4：資料雙保險</h3>
+    <section class="tools-panel tools-panel--backup tools-panel--collapsible" aria-labelledby="tools-backup-title">
+      <button
+        type="button"
+        id="btn-backup-panel-toggle"
+        class="tools-panel__toggle"
+        aria-expanded="false"
+        aria-controls="backup-panel-body"
+      >
+        <span id="tools-backup-title" class="tools-panel__title">📋 手動備份資料</span>
+        <span class="tools-panel__chevron" aria-hidden="true">▼</span>
+      </button>
+      <div id="backup-panel-body" class="tools-panel__collapsible-body" hidden>
       <div class="tools-panel__actions">
         <button
           type="button"
@@ -238,6 +249,7 @@
           ♻️ 還原全班資料
         </button>
       </div>
+      </div>
     </section>
 
     <section class="tools-panel tools-panel--class-code tools-panel--collapsible" aria-labelledby="tools-class-code-title">
@@ -248,7 +260,7 @@
         aria-expanded="false"
         aria-controls="class-code-panel-body"
       >
-        <span id="tools-class-code-title" class="tools-panel__title">☁️ 班級雲端代碼</span>
+        <span id="tools-class-code-title" class="tools-panel__title">切換班級</span>
         <span class="tools-panel__chevron" aria-hidden="true">▼</span>
       </button>
       <div id="class-code-panel-body" class="tools-panel__collapsible-body" hidden>
@@ -267,12 +279,13 @@
         </label>
         <div class="tools-panel__actions">
           <button type="button" id="btn-class-code-switch" class="tools-btn tools-btn--primary">
-            切換班級
+            確定
           </button>
         </div>
         <p id="class-code-sync-status" class="class-code-sync-status">雲端：尚未連線</p>
       </div>
     </section>
+    </div>
   </aside>
 
   <div id="score-toast" class="score-toast" hidden aria-live="polite">
@@ -418,6 +431,28 @@
   </div>
 
   <div
+    id="animal-pick-modal"
+    class="animal-pick-modal"
+    hidden
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="animal-pick-title"
+  >
+    <div class="animal-pick-modal__card">
+      <h2 id="animal-pick-title" class="animal-pick-modal__title">更改動物</h2>
+      <p id="animal-pick-hint" class="animal-pick-modal__hint">請選擇動物（可與其他同學重複）</p>
+      <ul id="animal-pick-list" class="animal-pick-list"></ul>
+      <button
+        type="button"
+        id="btn-animal-pick-close"
+        class="tools-btn tools-btn--ghost animal-pick-modal__close"
+      >
+        取消
+      </button>
+    </div>
+  </div>
+
+  <div
     id="mission-pick-modal"
     class="mission-pick-modal"
     hidden
@@ -440,6 +475,48 @@
   </div>
 
   <div
+    id="timer-mini-widget"
+    class="timer-mini-widget"
+    hidden
+    role="region"
+    aria-label="縮小計時器"
+  >
+    <div class="timer-mini-widget__head" title="拖曳移動">
+      <span id="timer-mini-mode" class="timer-mini-widget__mode">正計時</span>
+      <button
+        type="button"
+        id="btn-timer-mini-close"
+        class="timer-mini-widget__close"
+        aria-label="關閉計時器視窗"
+      >
+        ✕
+      </button>
+    </div>
+    <button
+      type="button"
+      id="btn-timer-mini-expand"
+      class="timer-mini-widget__body"
+      aria-label="點擊放大計時器"
+    >
+      <div
+        id="timer-display-mini"
+        class="timer-display timer-display--mini"
+        aria-live="polite"
+      >
+        00:00
+      </div>
+    </button>
+    <button
+      type="button"
+      id="btn-timer-mini-alarm-close"
+      class="timer-mini-widget__alarm-close"
+      hidden
+    >
+      🔕 關閉提示音
+    </button>
+  </div>
+
+  <div
     id="timer-expanded-modal"
     class="timer-expanded-modal"
     hidden
@@ -448,14 +525,24 @@
     aria-labelledby="timer-expanded-label"
   >
     <div class="timer-expanded-modal__card">
-      <button
-        type="button"
-        id="btn-timer-shrink"
-        class="timer-expanded-modal__shrink"
-        aria-label="縮小計時器"
-      >
-        🔽 縮小
-      </button>
+      <div class="timer-expanded-modal__toolbar">
+        <button
+          type="button"
+          id="btn-timer-shrink"
+          class="timer-expanded-modal__shrink"
+          aria-label="縮小計時器"
+        >
+          🔽 縮小
+        </button>
+        <button
+          type="button"
+          id="btn-timer-expanded-close"
+          class="timer-expanded-modal__close"
+          aria-label="關閉計時器"
+        >
+          ✕
+        </button>
+      </div>
       <p id="timer-expanded-label" class="timer-expanded-modal__label">課堂計時器</p>
       <p id="timer-expanded-mode" class="timer-expanded-modal__mode">正計時</p>
       <div
@@ -565,7 +652,9 @@
           aria-expanded="false"
           aria-controls="mission-reminder-body"
         >
-          <span class="mission-reminder-hud__label">🌟 今日任務</span>
+          <span class="mission-reminder-hud__label-grid" aria-label="今日任務">
+            <span>今</span><span>日</span><span>任</span><span>務</span>
+          </span>
           <span id="mission-reminder-title" class="mission-reminder-hud__title"></span>
           <span class="mission-reminder-hud__chevron" aria-hidden="true">▼</span>
         </button>
@@ -616,8 +705,8 @@
         <div class="dash-header__badge">
           <span class="dash-header__deco" aria-hidden="true">⭐</span>
           <h1 class="dash-header__title">
-            <span class="dash-header__title-outline" aria-hidden="true">學生加分紀錄表</span>
-            <span class="dash-header__title-gradient">學生加分紀錄表</span>
+            <span class="dash-header__title-outline" aria-hidden="true">欣賞園地</span>
+            <span class="dash-header__title-gradient">欣賞園地</span>
           </h1>
           <span class="dash-header__deco" aria-hidden="true">⭐</span>
         </div>
@@ -669,6 +758,6 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script src="firebase-config.js"></script>
   <script src="freesound-config.js"></script>
-  <script src="script.js?v=55"></script>
+  <script src="script.js?v=63"></script>
 </body>
 </html>

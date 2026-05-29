@@ -74,6 +74,9 @@
     "hog",
   ];
 
+  /** 更改動物選單中不顯示的物種（仍可用於預設分配） */
+  const ANIMALS_HIDDEN_FROM_PICKER = ["hog"];
+
   const IDLE_ANIM = "idle";
   const IDLE_PHASE_MS = 10000;
   const SPECIAL_PHASE_MS = 2500;
@@ -147,6 +150,7 @@
   let animCycleTimeoutId = null;
   let activeScoreMenuSlotId = null;
   let activeGroupScoreMenuId = null;
+  let animalPickSlotId = null;
 
   let webAudioCtx = null;
   let luckyDrawRunning = false;
@@ -171,6 +175,8 @@
   let countdownMinuteCuesPlayed = [];
   let timerMinuteCueEnabled = true;
   let timerExpanded = false;
+  let timerMiniVisible = false;
+  let timerMiniUserMoved = false;
   let bulkSelectedIds = [];
   let bulkPickActive = false;
   let bulkSuccessIds = [];
@@ -493,6 +499,7 @@
         animal: s.animal,
         score: clampScore(s.score),
         lives: clampLives(s.lives),
+        beamHueBase: normalizeBeamHueBase(s.beamHueBase, s.id),
       };
     });
   }
@@ -518,6 +525,7 @@
         score: savedScore,
         lives:
           typeof s.lives === "number" ? clampLives(s.lives) : LIVES_DEFAULT,
+        beamHueBase: normalizeBeamHueBase(s.beamHueBase, id),
       };
     });
   }
@@ -731,6 +739,7 @@
         if (s.id === 15) s.animal = "tiger";
         if (typeof s.score !== "number") s.score = 0;
         if (typeof s.lives !== "number") s.lives = LIVES_DEFAULT;
+        s.beamHueBase = normalizeBeamHueBase(s.beamHueBase, s.id);
         s.emoji = DEFAULT_EMOJI;
       });
     } else if (options.initial) {
@@ -921,6 +930,7 @@
         attachCloudListener(code);
         hideClassCodeModal();
         setCloudSyncStatus("雲端：已連線（" + code + "）", false);
+        updateDashHeaderTitle();
         if (callback) callback(true);
       })
       .catch(function (err) {
@@ -964,10 +974,10 @@
   function initCollapsiblePanel(toggleEl, bodyEl, panelEl) {
     if (!toggleEl || !bodyEl) return;
     toggleEl.addEventListener("click", function () {
-      const isOpen = !bodyEl.hidden;
-      bodyEl.hidden = isOpen;
-      if (panelEl) panelEl.classList.toggle("is-open", !isOpen);
-      toggleEl.setAttribute("aria-expanded", isOpen ? "false" : "true");
+      const willOpen = bodyEl.hidden;
+      bodyEl.hidden = !willOpen;
+      if (panelEl) panelEl.classList.toggle("is-open", willOpen);
+      toggleEl.setAttribute("aria-expanded", willOpen ? "true" : "false");
     });
   }
 
@@ -1001,6 +1011,11 @@
     }
     initCollapsiblePanel(panelToggle, panelBody, panel);
 
+    const backupToggle = document.getElementById("btn-backup-panel-toggle");
+    const backupBody = document.getElementById("backup-panel-body");
+    const backupPanel = document.querySelector(".tools-panel--backup");
+    initCollapsiblePanel(backupToggle, backupBody, backupPanel);
+
     const missionToggle = document.getElementById("btn-mission-reminder-toggle");
     const missionBody = document.getElementById("mission-reminder-body");
     if (missionToggle && missionBody) {
@@ -1015,12 +1030,90 @@
     scheduleCloudSync();
   }
 
+  function beamHueBaseForSlot(id) {
+    return ((id * 97 + 43) * 137) % 360;
+  }
+
+  function normalizeBeamHueBase(value, slotId) {
+    if (Number.isFinite(value)) {
+      const n = Math.floor(value) % 360;
+      return n < 0 ? n + 360 : n;
+    }
+    return beamHueBaseForSlot(slotId);
+  }
+
+  function getScoreBeamCount(score) {
+    return Math.min(10, Math.floor(Math.max(0, score) / 50));
+  }
+
+  function beamHueForSlot(slot, beamIndex) {
+    const base = normalizeBeamHueBase(slot.beamHueBase, slot.id);
+    return (base + beamIndex * 41) % 360;
+  }
+
+  function updateDashHeaderTitle() {
+    const outline = document.querySelector(".dash-header__title-outline");
+    const gradient = document.querySelector(".dash-header__title-gradient");
+    const prefix = currentClassCode
+      ? sanitizeClassCode(currentClassCode).toUpperCase()
+      : "";
+    const text = prefix ? prefix + "欣賞園地" : "欣賞園地";
+    if (outline) outline.textContent = text;
+    if (gradient) gradient.textContent = text;
+    document.title = text;
+  }
+
+  function beamAngleForIndex(beamIndex) {
+    if (beamIndex <= 0) return 0;
+    const pair = Math.ceil(beamIndex / 2);
+    const sign = beamIndex % 2 === 1 ? -1 : 1;
+    return sign * pair * 11;
+  }
+
+  function renderSlotBeams(stage, slot) {
+    if (!stage || !slot) return;
+    let beamsEl = stage.querySelector(".slot__beams");
+    const count = slot.hatched ? getScoreBeamCount(slot.score) : 0;
+    if (!count) {
+      if (beamsEl) beamsEl.hidden = true;
+      return;
+    }
+    if (!beamsEl) {
+      beamsEl = document.createElement("div");
+      beamsEl.className = "slot__beams";
+      beamsEl.setAttribute("aria-hidden", "true");
+      stage.insertBefore(beamsEl, stage.firstChild);
+    }
+    beamsEl.hidden = false;
+    beamsEl.innerHTML = "";
+
+    const core = document.createElement("div");
+    core.className = "slot__beams-core";
+    core.style.setProperty("--beam-hue", String(beamHueForSlot(slot, 0)));
+    beamsEl.appendChild(core);
+
+    for (let i = 0; i < count; i++) {
+      const beam = document.createElement("span");
+      beam.className = "slot__beam";
+      beam.style.setProperty("--beam-hue", String(beamHueForSlot(slot, i)));
+      beam.style.setProperty("--beam-angle", beamAngleForIndex(i) + "deg");
+      beam.style.setProperty("--beam-i", String(i));
+      beamsEl.appendChild(beam);
+    }
+  }
+
   function animalForSlot(id) {
     return ANIMALS[(id - 1) % ANIMALS.length];
   }
 
   function isValidAnimal(name) {
     return ANIMALS.indexOf(name) >= 0;
+  }
+
+  function getPickableAnimals() {
+    return ANIMALS.filter(function (animal) {
+      return ANIMALS_HIDDEN_FROM_PICKER.indexOf(animal) < 0;
+    });
   }
 
   function eggHueForSlot(id) {
@@ -1058,6 +1151,7 @@
         emoji: DEFAULT_EMOJI,
         score: 0,
         lives: LIVES_DEFAULT,
+        beamHueBase: beamHueBaseForSlot(id),
       };
     });
   }
@@ -1783,7 +1877,8 @@
 
   function showTimerAlarmModal() {
     syncTimerExpandedAlarmButton();
-    if (timerExpanded) {
+    syncTimerMiniAlarmButton();
+    if (timerExpanded || timerMiniVisible) {
       const modal = document.getElementById("timer-alarm-modal");
       if (modal) modal.hidden = true;
       document.body.classList.remove("timer-alarm-open");
@@ -1799,12 +1894,179 @@
     if (modal) modal.hidden = true;
     document.body.classList.remove("timer-alarm-open");
     syncTimerExpandedAlarmButton();
+    syncTimerMiniAlarmButton();
   }
 
   function syncTimerExpandedAlarmButton() {
     const btn = document.getElementById("btn-timer-expanded-alarm-close");
     if (!btn) return;
     btn.hidden = !(timerAlarmActive && timerExpanded);
+  }
+
+  function syncTimerMiniAlarmButton() {
+    const btn = document.getElementById("btn-timer-mini-alarm-close");
+    if (!btn) return;
+    btn.hidden = !(timerAlarmActive && timerMiniVisible);
+  }
+
+  function syncTimerMiniModeLabel() {
+    const modeEl = document.getElementById("timer-mini-mode");
+    if (!modeEl) return;
+    modeEl.textContent = timerMode === "countdown" ? "倒計時" : "正計時";
+  }
+
+  function positionTimerMiniDefault() {
+    const widget = document.getElementById("timer-mini-widget");
+    const teacherBtn = document.getElementById("btn-teacher-mode");
+    const slot1 = document.querySelector('.slot[data-slot-id="1"]');
+    if (!widget) return;
+
+    const margin = 8;
+    let top = margin;
+    let left = margin;
+
+    if (teacherBtn) {
+      const tb = teacherBtn.getBoundingClientRect();
+      top = tb.bottom + margin;
+      left = tb.left;
+    }
+
+    if (slot1) {
+      const s1 = slot1.getBoundingClientRect();
+      left = s1.left;
+      const preferredTop = s1.top - widget.offsetHeight - margin;
+      if (preferredTop > margin) {
+        top = preferredTop;
+      } else if (teacherBtn) {
+        top = teacherBtn.getBoundingClientRect().bottom + margin;
+      }
+    }
+
+    const maxLeft = Math.max(margin, window.innerWidth - widget.offsetWidth - margin);
+    const maxTop = Math.max(margin, window.innerHeight - widget.offsetHeight - margin);
+    widget.style.left = Math.min(Math.max(left, margin), maxLeft) + "px";
+    widget.style.top = Math.min(Math.max(top, margin), maxTop) + "px";
+  }
+
+  function showTimerMiniWidget() {
+    const widget = document.getElementById("timer-mini-widget");
+    if (!widget) return;
+    timerMiniVisible = true;
+    widget.hidden = false;
+    document.body.classList.add("timer-mini-open");
+    syncTimerMiniModeLabel();
+    if (!timerMiniUserMoved) {
+      positionTimerMiniDefault();
+    }
+    syncTimerMiniAlarmButton();
+    updateTimerDisplay();
+  }
+
+  function hideTimerMiniWidget() {
+    const widget = document.getElementById("timer-mini-widget");
+    timerMiniVisible = false;
+    if (widget) widget.hidden = true;
+    document.body.classList.remove("timer-mini-open");
+    syncTimerMiniAlarmButton();
+    if (timerAlarmActive && !timerExpanded) {
+      showTimerAlarmModal();
+    }
+  }
+
+  function initTimerMiniWidget() {
+    const widget = document.getElementById("timer-mini-widget");
+    const closeBtn = document.getElementById("btn-timer-mini-close");
+    const expandBtn = document.getElementById("btn-timer-mini-expand");
+    const alarmBtn = document.getElementById("btn-timer-mini-alarm-close");
+    const head = widget ? widget.querySelector(".timer-mini-widget__head") : null;
+
+    if (closeBtn) closeBtn.addEventListener("click", hideTimerMiniWidget);
+    if (expandBtn) {
+      expandBtn.addEventListener("click", function () {
+        if (timerMiniDragMoved) return;
+        expandTimerDisplay();
+      });
+    }
+    if (alarmBtn) {
+      alarmBtn.addEventListener("click", function () {
+        stopTimerAlarmLoop();
+        hideTimerMiniWidget();
+      });
+    }
+
+    let timerMiniDragMoved = false;
+    let dragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let dragOriginLeft = 0;
+    let dragOriginTop = 0;
+
+    function onDragStart(clientX, clientY) {
+      if (!widget) return;
+      dragging = true;
+      timerMiniDragMoved = false;
+      dragStartX = clientX;
+      dragStartY = clientY;
+      const rect = widget.getBoundingClientRect();
+      dragOriginLeft = rect.left;
+      dragOriginTop = rect.top;
+    }
+
+    function onDragMove(clientX, clientY) {
+      if (!dragging || !widget) return;
+      const dx = clientX - dragStartX;
+      const dy = clientY - dragStartY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        timerMiniDragMoved = true;
+        timerMiniUserMoved = true;
+      }
+      const margin = 8;
+      const maxLeft = Math.max(margin, window.innerWidth - widget.offsetWidth - margin);
+      const maxTop = Math.max(margin, window.innerHeight - widget.offsetHeight - margin);
+      const nextLeft = Math.min(Math.max(dragOriginLeft + dx, margin), maxLeft);
+      const nextTop = Math.min(Math.max(dragOriginTop + dy, margin), maxTop);
+      widget.style.left = nextLeft + "px";
+      widget.style.top = nextTop + "px";
+    }
+
+    function onDragEnd() {
+      dragging = false;
+    }
+
+    if (head) {
+      head.addEventListener("mousedown", function (ev) {
+        if (ev.target.closest(".timer-mini-widget__close")) return;
+        ev.preventDefault();
+        onDragStart(ev.clientX, ev.clientY);
+      });
+      head.addEventListener(
+        "touchstart",
+        function (ev) {
+          if (ev.target.closest(".timer-mini-widget__close")) return;
+          if (!ev.touches || !ev.touches[0]) return;
+          ev.preventDefault();
+          onDragStart(ev.touches[0].clientX, ev.touches[0].clientY);
+        },
+        { passive: false }
+      );
+    }
+
+    document.addEventListener("mousemove", function (ev) {
+      if (!dragging) return;
+      onDragMove(ev.clientX, ev.clientY);
+    });
+    document.addEventListener("mouseup", onDragEnd);
+    document.addEventListener("touchmove", function (ev) {
+      if (!dragging || !ev.touches || !ev.touches[0]) return;
+      onDragMove(ev.touches[0].clientX, ev.touches[0].clientY);
+    });
+    document.addEventListener("touchend", onDragEnd);
+
+    window.addEventListener("resize", function () {
+      if (timerMiniVisible && !timerMiniUserMoved) {
+        positionTimerMiniDefault();
+      }
+    });
   }
 
   function stopTimerAlarmLoop() {
@@ -3154,6 +3416,7 @@
   function expandTimerDisplay() {
     const modal = document.getElementById("timer-expanded-modal");
     if (!modal) return;
+    hideTimerMiniWidget();
     timerExpanded = true;
     modal.hidden = false;
     document.body.classList.add("timer-expanded-open");
@@ -3165,6 +3428,19 @@
       document.body.classList.remove("timer-alarm-open");
     }
     syncTimerExpandedAlarmButton();
+    syncTimerMiniAlarmButton();
+  }
+
+  function closeTimerExpanded() {
+    const modal = document.getElementById("timer-expanded-modal");
+    timerExpanded = false;
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("timer-expanded-open");
+    syncTimerExpandedAlarmButton();
+    syncTimerMiniAlarmButton();
+    if (timerAlarmActive && !timerMiniVisible) {
+      showTimerAlarmModal();
+    }
   }
 
   function shrinkTimerDisplay() {
@@ -3172,8 +3448,11 @@
     timerExpanded = false;
     if (modal) modal.hidden = true;
     document.body.classList.remove("timer-expanded-open");
+    timerMiniUserMoved = false;
+    showTimerMiniWidget();
     syncTimerExpandedAlarmButton();
-    if (timerAlarmActive) {
+    syncTimerMiniAlarmButton();
+    if (timerAlarmActive && !timerMiniVisible) {
       showTimerAlarmModal();
     }
   }
@@ -3181,7 +3460,8 @@
   function updateTimerDisplay() {
     const display = document.getElementById("timer-display");
     const expandedDisplay = document.getElementById("timer-display-expanded");
-    if (!display && !expandedDisplay) return;
+    const miniDisplay = document.getElementById("timer-display-mini");
+    if (!display && !expandedDisplay && !miniDisplay) return;
 
     let ms = 0;
     if (timerMode === "stopwatch") {
@@ -3192,6 +3472,7 @@
       const text = formatTimerMs(ms, ms >= 3600000);
       applyTimerDisplayState(display, text, false);
       applyTimerDisplayState(expandedDisplay, text, false);
+      applyTimerDisplayState(miniDisplay, text, false);
       return;
     }
 
@@ -3203,6 +3484,7 @@
     const urgent = timerRunning && ms > 0 && ms <= 10000;
     applyTimerDisplayState(display, text, urgent);
     applyTimerDisplayState(expandedDisplay, text, urgent);
+    applyTimerDisplayState(miniDisplay, text, urgent);
 
     checkCountdownMinuteCues(ms);
 
@@ -3216,6 +3498,7 @@
       countdownRemainingMs = 0;
       applyTimerDisplayState(display, "00:00", false);
       applyTimerDisplayState(expandedDisplay, "00:00", false);
+      applyTimerDisplayState(miniDisplay, "00:00", false);
       void startTimerAlarmLoop();
     }
   }
@@ -3319,6 +3602,7 @@
       stopwatchElapsedMs = 0;
     }
     syncTimerExpandedModeLabel();
+    syncTimerMiniModeLabel();
     updateTimerDisplay();
   }
 
@@ -4143,8 +4427,12 @@
     if (timerResetBtn) timerResetBtn.addEventListener("click", timerReset);
 
     const timerShrinkBtn = document.getElementById("btn-timer-shrink");
+    const timerExpandedCloseBtn = document.getElementById("btn-timer-expanded-close");
     const timerExpandedModal = document.getElementById("timer-expanded-modal");
     if (timerShrinkBtn) timerShrinkBtn.addEventListener("click", shrinkTimerDisplay);
+    if (timerExpandedCloseBtn) {
+      timerExpandedCloseBtn.addEventListener("click", closeTimerExpanded);
+    }
     const timerExpandedAlarmClose = document.getElementById(
       "btn-timer-expanded-alarm-close"
     );
@@ -4156,6 +4444,8 @@
         if (ev.target === timerExpandedModal) shrinkTimerDisplay();
       });
     }
+
+    initTimerMiniWidget();
 
     const minuteCueBtn = document.getElementById("btn-timer-minute-cue");
     if (minuteCueBtn) {
@@ -4418,6 +4708,7 @@
     updateSlotBulkClasses(el, slot);
     applySlotDrawClasses(el, slot.id);
     updateSlotStageA11y(el, slot);
+    renderSlotBeams(el.querySelector(".slot__stage"), slot);
   }
 
   function renderSlotElement(slot) {
@@ -4533,6 +4824,7 @@
     applySlotDrawClasses(el, slot.id);
     updateSlotBulkClasses(el, slot);
     updateSlotStageA11y(el, slot);
+    renderSlotBeams(el.querySelector(".slot__stage"), slot);
   }
 
   function renderAll() {
@@ -4572,6 +4864,83 @@
     showScoreToast(slot, delta);
   }
 
+  function closeAnimalPickModal() {
+    const modal = document.getElementById("animal-pick-modal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("animal-pick-open");
+    animalPickSlotId = null;
+  }
+
+  function applyAnimalChange(slotId, animal) {
+    const slot = getSlotById(slotId);
+    if (!slot || !isValidAnimal(animal)) return;
+    slot.animal = animal;
+    saveSlots();
+    renderSlotElement(slot);
+    closeAnimalPickModal();
+    const label = ANIMAL_LABELS[animal] || animal;
+    alert(
+      "已將 " +
+        slot.id +
+        " 號「" +
+        slot.name +
+        "」的動物更改為「" +
+        label +
+        "」"
+    );
+  }
+
+  function renderAnimalPickList() {
+    const list = document.getElementById("animal-pick-list");
+    if (!list) return;
+    list.innerHTML = "";
+    const slot = animalPickSlotId ? getSlotById(animalPickSlotId) : null;
+
+    getPickableAnimals().forEach(function (animal) {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "animal-pick-item";
+      if (slot && slot.animal === animal) btn.classList.add("is-current");
+      btn.textContent = ANIMAL_LABELS[animal] || animal;
+      btn.addEventListener("click", function () {
+        applyAnimalChange(animalPickSlotId, animal);
+      });
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+  }
+
+  function openAnimalPickModal(slotId) {
+    const slot = getSlotById(slotId);
+    if (!slot) return;
+    animalPickSlotId = slotId;
+    const hint = document.getElementById("animal-pick-hint");
+    if (hint) {
+      hint.textContent =
+        "請為 " +
+        slot.id +
+        " 號「" +
+        slot.name +
+        "」選擇動物（可與其他同學重複）";
+    }
+    renderAnimalPickList();
+    const modal = document.getElementById("animal-pick-modal");
+    if (modal) modal.hidden = false;
+    document.body.classList.add("animal-pick-open");
+  }
+
+  function initAnimalPickModal() {
+    const closeBtn = document.getElementById("btn-animal-pick-close");
+    const modal = document.getElementById("animal-pick-modal");
+    if (closeBtn) closeBtn.addEventListener("click", closeAnimalPickModal);
+    if (modal) {
+      modal.addEventListener("click", function (ev) {
+        if (ev.target === modal) closeAnimalPickModal();
+      });
+    }
+  }
+
   function forceHatchSlot(slotId) {
     if (!teacherMode && !ensureTeacherModeOn()) return;
     const slot = getSlotById(slotId);
@@ -4591,6 +4960,10 @@
     if (!teacherMode && !ensureTeacherModeOn()) return;
     const slot = getSlotById(slotId);
     if (!slot) return;
+    if (!slot.hatched) {
+      alert("此插槽已是蛋狀態。");
+      return;
+    }
     slot.hatched = false;
     saveSlots();
     renderSlotElement(slot);
@@ -4727,9 +5100,8 @@
       slot.name +
       "」\n\n請輸入操作編號：\n" +
       "1 = 修改學生姓名\n" +
-      "2 = 變回蛋（取消孵化）\n" +
-      "3 = 與其他號碼交換神獸物種\n" +
-      "4 = 指定／變更組別";
+      "2 = 更改動物\n" +
+      "3 = 指定／變更組別";
 
     const choice = prompt(menu, "1");
     if (choice === null) return;
@@ -4746,61 +5118,11 @@
     }
 
     if (choice.trim() === "2") {
-      if (!slot.hatched) {
-        alert("此插槽已是蛋狀態。");
-        return;
-      }
-      const ok = confirm(
-        "確定要將 " + slot.id + " 號「" + slot.name + "」變回蛋嗎？"
-      );
-      if (!ok) return;
-      slot.hatched = false;
-      saveSlots();
-      renderSlotElement(slot);
-      alert("已變回蛋狀。");
+      openAnimalPickModal(slot.id);
       return;
     }
 
     if (choice.trim() === "3") {
-      const otherRaw = prompt(
-        "要與哪一號交換神獸？（輸入 1～22 的數字）",
-        ""
-      );
-      if (otherRaw === null) return;
-      const otherId = parseInt(otherRaw, 10);
-      if (Number.isNaN(otherId) || otherId < 1 || otherId > SLOT_COUNT) {
-        alert("請輸入有效的號碼（1～22）。");
-        return;
-      }
-      if (otherId === slot.id) {
-        alert("不能與自己交換。");
-        return;
-      }
-      const other = getSlotById(otherId);
-      if (!other) return;
-
-      const tmpAnimal = slot.animal;
-      slot.animal = other.animal;
-      other.animal = tmpAnimal;
-
-      saveSlots();
-      renderSlotElement(slot);
-      renderSlotElement(other);
-      alert(
-        "已交換：" +
-          slot.id +
-          " 號（" +
-          slot.animal +
-          "）↔ " +
-          other.id +
-          " 號（" +
-          other.animal +
-          "）"
-      );
-      return;
-    }
-
-    if (choice.trim() === "4") {
       assignSlotToGroup(slot.id);
       return;
     }
@@ -4877,6 +5199,20 @@
     initClassCodeUi();
     ensureSiteAccess(function (ok) {
       if (!ok) return;
+      const remembered = readRememberedClassCode();
+      if (remembered) {
+        connectToClassCode(remembered, function (codeOk) {
+          if (!codeOk) {
+            showClassCodeModal(function (retryOk) {
+              if (!retryOk) return;
+              continueBoot();
+            });
+            return;
+          }
+          continueBoot();
+        });
+        return;
+      }
       showClassCodeModal(function (codeOk) {
         if (!codeOk) return;
         continueBoot();
@@ -4895,6 +5231,8 @@
 
     preloadFreesoundEffects();
     initToolsSidebar();
+    initAnimalPickModal();
+    updateDashHeaderTitle();
 
     if (btnTeacherMode) {
       btnTeacherMode.addEventListener("dblclick", onTeacherModeButtonDblClick);
