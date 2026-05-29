@@ -1428,29 +1428,86 @@
     return y + "-" + m + "-" + day;
   }
 
-  function ensureSiteAccess() {
+  function ensureSiteAccess(onDone) {
     try {
-      if (sessionStorage.getItem(SITE_ACCESS_SESSION_KEY) === "1") return true;
+      if (sessionStorage.getItem(SITE_ACCESS_SESSION_KEY) === "1") {
+        onDone(true);
+        return;
+      }
     } catch (e) {}
 
-    while (true) {
-      const input = prompt("請輸入網站進入密碼：");
-      if (input === null) {
-        document.body.innerHTML =
-          '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;">' +
-          '<div style="max-width:420px;padding:1rem 1.25rem;border-radius:12px;background:#fff7ed;color:#7c2d12;border:2px solid #fdba74;font-weight:700;text-align:center;">' +
-          "未輸入正確密碼，已停止進入網站。" +
-          "</div></main>";
-        return false;
-      }
-      if (input.trim() === SITE_ACCESS_PASSWORD) {
+    const modal = document.getElementById("site-access-modal");
+    const input = document.getElementById("site-access-password");
+    const submitBtn = document.getElementById("btn-site-access-submit");
+    const cancelBtn = document.getElementById("btn-site-access-cancel");
+    const errorEl = document.getElementById("site-access-error");
+
+    if (!modal || !input || !submitBtn) {
+      onDone(false);
+      return;
+    }
+
+    function showError(show) {
+      if (errorEl) errorEl.hidden = !show;
+    }
+
+    function closeGate() {
+      modal.hidden = true;
+      document.body.classList.remove("site-access-open");
+      input.value = "";
+      showError(false);
+    }
+
+    function denyAccess() {
+      closeGate();
+      document.body.innerHTML =
+        '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;">' +
+        '<div style="max-width:420px;padding:1rem 1.25rem;border-radius:12px;background:#fff7ed;color:#7c2d12;border:2px solid #fdba74;font-weight:700;text-align:center;">' +
+        "未輸入正確密碼，已停止進入網站。" +
+        "</div></main>";
+      onDone(false);
+    }
+
+    function trySubmit() {
+      const val = input.value.trim();
+      if (val === SITE_ACCESS_PASSWORD) {
         try {
           sessionStorage.setItem(SITE_ACCESS_SESSION_KEY, "1");
         } catch (e) {}
-        return true;
+        closeGate();
+        onDone(true);
+        return;
       }
-      alert("密碼錯誤，請再試一次。");
+      showError(true);
+      input.value = "";
+      input.focus();
     }
+
+    function onSubmitClick() {
+      trySubmit();
+    }
+
+    function onCancelClick() {
+      denyAccess();
+    }
+
+    function onInputKey(ev) {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        trySubmit();
+      }
+    }
+
+    submitBtn.addEventListener("click", onSubmitClick);
+    if (cancelBtn) cancelBtn.addEventListener("click", onCancelClick);
+    input.addEventListener("keydown", onInputKey);
+
+    modal.hidden = false;
+    document.body.classList.add("site-access-open");
+    showError(false);
+    setTimeout(function () {
+      input.focus();
+    }, 0);
   }
 
   function loadGroups() {
@@ -2854,18 +2911,114 @@
     });
   }
 
+  function getDailyMissionById(id) {
+    return DAILY_MISSIONS.find(function (m) {
+      return m.id === id;
+    });
+  }
+
+  function refreshMissionPickButton() {
+    const pickBtn = document.getElementById("btn-mission-pick");
+    if (!pickBtn) return;
+    pickBtn.hidden = !teacherMode || !missionReminderVisible;
+  }
+
+  function stopScoreKingMissionSilently() {
+    if (!scoreKingMission.active) return;
+    scoreKingMission.active = false;
+    scoreKingMission.sessionScore = 0;
+    hideMissionScoreHud();
+  }
+
+  function applyTeacherMissionReplacement(mission) {
+    if (!teacherMode || !mission) return;
+    stopScoreKingMissionSilently();
+    dailyMissionDrawCommitted = true;
+    showMissionReminder(mission);
+    if (mission.type === "scoreKing") {
+      startScoreKingMission();
+    }
+    closeMissionPickModal();
+  }
+
+  function renderMissionPickList() {
+    const list = document.getElementById("mission-pick-list");
+    if (!list) return;
+    list.innerHTML = "";
+    const currentId = currentDailyMission ? currentDailyMission.id : "";
+
+    DAILY_MISSIONS.forEach(function (mission) {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "mission-pick-item";
+      if (mission.id === currentId) btn.classList.add("is-current");
+      btn.innerHTML =
+        '<span class="mission-pick-item__title">' +
+        mission.title +
+        "</span>" +
+        '<span class="mission-pick-item__desc">' +
+        mission.desc +
+        " <strong>" +
+        getMissionRewardText(mission) +
+        "</strong></span>" +
+        (mission.id === currentId
+          ? '<span class="mission-pick-item__badge">目前顯示中</span>'
+          : "");
+      btn.addEventListener("click", function () {
+        applyTeacherMissionReplacement(mission);
+      });
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+  }
+
+  function openMissionPickModal() {
+    if (!teacherMode) {
+      ensureTeacherModeOn();
+      return;
+    }
+    if (!missionReminderVisible) {
+      alert("請先抽取或開始今日任務後，再揀選任務。");
+      return;
+    }
+    renderMissionPickList();
+    const modal = document.getElementById("mission-pick-modal");
+    if (modal) modal.hidden = false;
+    document.body.classList.add("mission-pick-open");
+  }
+
+  function closeMissionPickModal() {
+    const modal = document.getElementById("mission-pick-modal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("mission-pick-open");
+  }
+
   function syncMissionHudLayout() {
-    document.body.classList.toggle("mission-score-visible", scoreKingMission.active);
+    const stack = document.getElementById("dash-mission-stack");
+    const reminderHud = document.getElementById("mission-reminder-hud");
+    const showReminder = missionReminderVisible;
+    const showScore = scoreKingMission.active;
+
+    if (reminderHud) reminderHud.hidden = !showReminder;
+
+    if (stack) {
+      stack.hidden = !showReminder && !showScore;
+    }
+
+    refreshMissionPickButton();
+    document.body.classList.toggle("mission-score-visible", showScore);
+    document.body.classList.toggle("mission-reminder-visible", showReminder);
   }
 
   function getMissionFocusHtml(mission) {
     const reward = getMissionRewardText(mission);
     return (
-      '<span class="daily-mission-modal__desc-text">' +
+      '<span class="daily-mission-modal__desc-line">' +
       mission.desc +
-      '</span><span class="daily-mission-modal__reward-inline">' +
+      ' <strong class="daily-mission-modal__reward-inline">' +
       reward +
-      "</span>"
+      "</strong></span>"
     );
   }
 
@@ -2887,16 +3040,12 @@
     currentDailyMission = mission;
     missionReminderVisible = true;
     fillMissionContent("reminder", mission);
-    const hud = document.getElementById("mission-reminder-hud");
-    if (hud) hud.hidden = false;
     syncMissionHudLayout();
   }
 
   function hideMissionReminder() {
     missionReminderVisible = false;
     currentDailyMission = null;
-    const hud = document.getElementById("mission-reminder-hud");
-    if (hud) hud.hidden = true;
     syncMissionHudLayout();
   }
 
@@ -3210,6 +3359,9 @@
     const endBtn = document.getElementById("btn-mission-end");
     const reminderClose = document.getElementById("btn-mission-reminder-close");
     const goalAchievedBtn = document.getElementById("btn-mission-goal-achieved");
+    const pickBtn = document.getElementById("btn-mission-pick");
+    const pickCloseBtn = document.getElementById("btn-mission-pick-close");
+    const pickModal = document.getElementById("mission-pick-modal");
     const successClose = document.getElementById("btn-mission-success-close");
     const encourageClose = document.getElementById("btn-mission-encourage-close");
     const missionModal = document.getElementById("daily-mission-modal");
@@ -3220,6 +3372,13 @@
     }
     if (goalAchievedBtn) {
       goalAchievedBtn.addEventListener("click", onMissionReminderGoalAchieved);
+    }
+    if (pickBtn) pickBtn.addEventListener("click", openMissionPickModal);
+    if (pickCloseBtn) pickCloseBtn.addEventListener("click", closeMissionPickModal);
+    if (pickModal) {
+      pickModal.addEventListener("click", function (ev) {
+        if (ev.target === pickModal) closeMissionPickModal();
+      });
     }
     if (endBtn) endBtn.addEventListener("click", endScoreKingMission);
     if (successClose) {
@@ -3616,14 +3775,38 @@
     syncSlotLifeHeartStates(livesEl, slot);
   }
 
+  function updateSlotStageA11y(el, slot) {
+    const stageEl = el.querySelector(".slot__stage");
+    if (!stageEl) return;
+    const name =
+      slot.name && slot.name !== DEFAULT_NAME ? slot.name : slot.id + " 號學生";
+    if (slot.hatched) {
+      stageEl.setAttribute("aria-label", name + " 的神獸，點擊進入內頁");
+    } else {
+      stageEl.setAttribute("aria-label", name + " 的蛋，點擊命名或孵化");
+    }
+  }
+
   function renderSlotElement(slot) {
     let el = document.querySelector('.slot[data-slot-id="' + slot.id + '"]');
     if (!el) {
       el = document.createElement("article");
       el.className = "slot";
       el.dataset.slotId = String(slot.id);
-      el.setAttribute("role", "button");
-      el.setAttribute("tabindex", "0");
+
+      el.addEventListener("click", function (ev) {
+        if (ev.target.closest(".slot__stage")) return;
+        if (
+          ev.target.closest(".slot__footer") ||
+          ev.target.closest(".slot__teacher-tools") ||
+          ev.target.closest(".slot__lives") ||
+          ev.target.closest(".score-quick-menu")
+        ) {
+          return;
+        }
+        onSlotCardClick(slot.id);
+      });
+
       el.innerHTML =
         '<span class="slot__num"></span>' +
         '<div class="slot__teacher-tools">' +
@@ -3639,15 +3822,24 @@
         "</div>" +
         '<div class="score-quick-menu"></div>';
 
-      el.addEventListener("click", function () {
-        onSlotClick(slot.id);
-      });
-      el.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSlotClick(slot.id);
-        }
-      });
+      const stageEl = el.querySelector(".slot__stage");
+      if (stageEl && stageEl.dataset.beastBound !== "1") {
+        stageEl.dataset.beastBound = "1";
+        stageEl.setAttribute("role", "button");
+        stageEl.setAttribute("tabindex", "0");
+        stageEl.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          onSlotBeastClick(slot.id);
+        });
+        stageEl.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            e.stopPropagation();
+            onSlotBeastClick(slot.id);
+          }
+        });
+      }
+
       gridEl.appendChild(el);
     }
 
@@ -3734,6 +3926,7 @@
       bulkPickActive && bulkSelectedIds.indexOf(slot.id) >= 0
     );
     el.classList.toggle("slot--bulk-success", bulkSuccessIds.indexOf(slot.id) >= 0);
+    updateSlotStageA11y(el, slot);
   }
 
   function renderAll() {
@@ -3812,6 +4005,7 @@
     }
     updateBulkPickUI();
     refreshScoreUndoButton();
+    refreshMissionPickButton();
     renderAll();
   }
 
@@ -3830,6 +4024,7 @@
   function closeTeacherMode() {
     if (!teacherMode) return;
     teacherMode = false;
+    closeMissionPickModal();
     closeAllQuickScoreMenus();
     refreshTeacherModeUI();
   }
@@ -4002,7 +4197,18 @@
     alert("無效的操作編號。");
   }
 
-  function onSlotClick(slotId) {
+  function onSlotCardClick(slotId) {
+    if (bulkPickActive) {
+      toggleBulkSlot(slotId);
+      return;
+    }
+    if (teacherMode) {
+      closeQuickScoreMenu();
+      onSlotTeacherAction(slotId);
+    }
+  }
+
+  function onSlotBeastClick(slotId) {
     const slot = getSlotById(slotId);
     if (!slot) return;
 
@@ -4051,10 +4257,19 @@
     }
   }
 
+  function onSlotClick(slotId) {
+    onSlotCardClick(slotId);
+  }
+
   function boot() {
     if (!gridEl) return;
-    if (!ensureSiteAccess()) return;
+    ensureSiteAccess(function (ok) {
+      if (!ok) return;
+      continueBoot();
+    });
+  }
 
+  function continueBoot() {
     showFileProtocolBanner();
     loadSlots();
     loadGroups();
@@ -4120,6 +4335,7 @@
     renderGroupButtons();
     updateClassProgress();
     refreshScoreUndoButton();
+    syncMissionHudLayout();
     startAnimationCycle();
   }
 

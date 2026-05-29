@@ -4,14 +4,47 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>學生加分紀錄表</title>
-  <link rel="stylesheet" href="style.css?v=46" />
+  <link rel="stylesheet" href="style.css?v=50" />
   <script
     type="module"
     src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"
   ></script>
 </head>
 <body>
-  <div class="build-version-badge" aria-label="版本號">v46</div>
+  <div
+    id="site-access-modal"
+    class="site-access-modal"
+    hidden
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="site-access-title"
+  >
+    <div class="site-access-modal__card">
+      <h2 id="site-access-title" class="site-access-modal__title">進入網站</h2>
+      <p class="site-access-modal__hint">請輸入密碼</p>
+      <label class="site-access-modal__field" for="site-access-password">
+        <span class="visually-hidden">網站進入密碼</span>
+        <input
+          id="site-access-password"
+          class="site-access-modal__input"
+          type="password"
+          autocomplete="current-password"
+          placeholder="密碼"
+        />
+      </label>
+      <p id="site-access-error" class="site-access-modal__error" hidden>密碼錯誤，請再試一次。</p>
+      <div class="site-access-modal__actions">
+        <button type="button" id="btn-site-access-submit" class="tools-btn tools-btn--primary">
+          確認進入
+        </button>
+        <button type="button" id="btn-site-access-cancel" class="tools-btn tools-btn--ghost">
+          取消
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="build-version-badge" aria-label="版本號">v51</div>
 
   <button
     type="button"
@@ -316,6 +349,28 @@
   </div>
 
   <div
+    id="mission-pick-modal"
+    class="mission-pick-modal"
+    hidden
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="mission-pick-title"
+  >
+    <div class="mission-pick-modal__card">
+      <h2 id="mission-pick-title" class="mission-pick-modal__title">揀選今日任務</h2>
+      <p class="mission-pick-modal__hint">請點選要顯示的任務（僅教師可見）</p>
+      <ul id="mission-pick-list" class="mission-pick-list"></ul>
+      <button
+        type="button"
+        id="btn-mission-pick-close"
+        class="tools-btn tools-btn--ghost mission-pick-modal__close"
+      >
+        取消
+      </button>
+    </div>
+  </div>
+
+  <div
     id="timer-expanded-modal"
     class="timer-expanded-modal"
     hidden
@@ -350,26 +405,6 @@
         🔕 關閉提示音
       </button>
     </div>
-  </div>
-
-  <div id="mission-score-hud" class="mission-score-hud" hidden aria-live="polite">
-    <p class="mission-score-hud__label">本節累積得分</p>
-    <div id="mission-score-hud-value" class="mission-score-hud__score">0</div>
-    <div class="mission-score-hud__footer">
-      <div
-        class="mission-score-hud__track"
-        role="progressbar"
-        aria-valuemin="0"
-        aria-valuemax="30"
-        aria-valuenow="0"
-      >
-        <div id="mission-score-hud-bar" class="mission-score-hud__bar"></div>
-      </div>
-      <button type="button" id="btn-mission-end" class="mission-score-hud__end">
-        🏁 結束課堂
-      </button>
-    </div>
-  </div>
   </div>
 
   <div
@@ -439,6 +474,63 @@
   </div>
 
   <div class="dash-layout">
+    <div id="dash-mission-stack" class="dash-mission-stack" hidden>
+      <aside
+        id="mission-reminder-hud"
+        class="mission-reminder-hud"
+        hidden
+        aria-label="今日任務提醒"
+      >
+        <button
+          type="button"
+          id="btn-mission-reminder-close"
+          class="mission-reminder-hud__close"
+          aria-label="關閉任務提醒"
+        >
+          ✕
+        </button>
+        <div class="mission-reminder-hud__label-row">
+          <p class="mission-reminder-hud__label">🌟 今日任務</p>
+          <button
+            type="button"
+            id="btn-mission-pick"
+            class="mission-reminder-hud__pick-btn"
+            hidden
+          >
+            揀選任務
+          </button>
+        </div>
+        <h3 id="mission-reminder-title" class="mission-reminder-hud__title"></h3>
+        <div id="mission-reminder-desc" class="mission-reminder-hud__desc"></div>
+        <button
+          type="button"
+          id="btn-mission-goal-achieved"
+          class="mission-reminder-hud__goal-btn"
+        >
+          達成目標！
+        </button>
+      </aside>
+
+      <div id="mission-score-hud" class="mission-score-hud" hidden aria-live="polite">
+        <p class="mission-score-hud__label">本節累積得分</p>
+        <div id="mission-score-hud-value" class="mission-score-hud__score">0</div>
+        <div class="mission-score-hud__footer">
+          <div
+            class="mission-score-hud__track"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="30"
+            aria-valuenow="0"
+          >
+            <div id="mission-score-hud-bar" class="mission-score-hud__bar"></div>
+          </div>
+          <button type="button" id="btn-mission-end" class="mission-score-hud__end">
+            🏁 結束課堂
+          </button>
+        </div>
+      </div>
+    </div>
+
     <header class="dash-header">
       <div class="dash-header__row">
         <div class="dash-header__badge">
@@ -449,34 +541,6 @@
           </h1>
           <span class="dash-header__deco" aria-hidden="true">⭐</span>
         </div>
-
-        <aside
-          id="mission-reminder-hud"
-          class="mission-reminder-hud"
-          hidden
-          aria-label="今日任務提醒"
-        >
-          <button
-            type="button"
-            id="btn-mission-reminder-close"
-            class="mission-reminder-hud__close"
-            aria-label="關閉任務提醒"
-          >
-            ✕
-          </button>
-          <div class="mission-reminder-hud__head">
-            <p class="mission-reminder-hud__label">🌟 今日任務</p>
-            <h3 id="mission-reminder-title" class="mission-reminder-hud__title"></h3>
-          </div>
-          <div id="mission-reminder-desc" class="mission-reminder-hud__desc"></div>
-          <button
-            type="button"
-            id="btn-mission-goal-achieved"
-            class="mission-reminder-hud__goal-btn"
-          >
-            達成目標！
-          </button>
-        </aside>
       </div>
     </header>
 
@@ -522,6 +586,6 @@
   </div>
 
   <script src="freesound-config.js"></script>
-  <script src="script.js?v=45"></script>
+  <script src="script.js?v=51"></script>
 </body>
 </html>

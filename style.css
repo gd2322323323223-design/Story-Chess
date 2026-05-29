@@ -33,6 +33,104 @@ body {
   padding: 1rem 1.25rem 2rem;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.site-access-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.site-access-modal[hidden] {
+  display: none;
+}
+
+.site-access-modal__card {
+  width: min(92vw, 380px);
+  padding: 1.35rem 1.25rem 1.2rem;
+  border-radius: 16px;
+  text-align: center;
+  background: linear-gradient(
+    165deg,
+    rgba(255, 253, 231, 0.98) 0%,
+    rgba(255, 236, 179, 0.97) 100%
+  );
+  border: 2px solid rgba(249, 115, 22, 0.4);
+  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.28);
+}
+
+.site-access-modal__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #7c2d12;
+}
+
+.site-access-modal__hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #9a3412;
+}
+
+.site-access-modal__field {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.site-access-modal__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 2px solid rgba(217, 119, 6, 0.45);
+  font-size: 1rem;
+  font-weight: 700;
+  color: #422006;
+  background: #fff;
+}
+
+.site-access-modal__input:focus {
+  outline: none;
+  border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.25);
+}
+
+.site-access-modal__error {
+  margin: 0 0 0.65rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #b91c1c;
+}
+
+.site-access-modal__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.site-access-modal__actions .tools-btn--ghost {
+  color: #422006;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(120, 53, 15, 0.28);
+}
+
 /* ===== 功能側邊欄 ===== */
 .tools-tab {
   position: fixed;
@@ -880,20 +978,15 @@ body.lucky-draw-running .slot {
   gap: 0.3rem;
   min-height: 2rem;
   padding: 0.32rem 0.72rem 0.32rem 0.55rem;
-  border: 1.5px solid rgba(217, 119, 6, 0.45);
+  border: 1.5px solid rgba(45, 212, 191, 0.9);
   border-radius: 999px;
   font-family: inherit;
   line-height: 1.15;
-  color: #7c2d12;
-  background: linear-gradient(
-    145deg,
-    #fffbeb 0%,
-    #fde68a 48%,
-    #fbbf24 100%
-  );
+  color: #042f2e;
+  background: linear-gradient(145deg, #5eead4 0%, #2dd4bf 55%, #14b8a6 100%);
   box-shadow:
-    0 4px 14px rgba(217, 119, 6, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    0 4px 0 rgba(15, 118, 110, 0.45),
+    0 8px 22px rgba(45, 212, 191, 0.4);
   cursor: pointer;
   user-select: none;
   transition:
@@ -906,7 +999,7 @@ body.lucky-draw-running .slot {
 .teacher-mode-btn__icon {
   font-size: 0.95rem;
   line-height: 1;
-  filter: drop-shadow(0 1px 1px rgba(124, 45, 18, 0.2));
+  filter: drop-shadow(0 1px 2px rgba(15, 118, 110, 0.25));
 }
 
 .teacher-mode-btn__label {
@@ -914,28 +1007,41 @@ body.lucky-draw-running .slot {
   font-weight: 900;
   letter-spacing: 0.06em;
   white-space: nowrap;
-  color: #78350f;
+  color: #042f2e;
 }
 
 .teacher-mode-btn:hover {
   transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+.teacher-mode-btn.is-active {
+  color: #7c2d12;
+  border-color: rgba(217, 119, 6, 0.45);
+  background: linear-gradient(
+    145deg,
+    #fffbeb 0%,
+    #fde68a 48%,
+    #fbbf24 100%
+  );
+  box-shadow:
+    0 4px 14px rgba(217, 119, 6, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.teacher-mode-btn.is-active .teacher-mode-btn__icon {
+  filter: drop-shadow(0 1px 1px rgba(124, 45, 18, 0.2));
+}
+
+.teacher-mode-btn.is-active .teacher-mode-btn__label {
+  color: #78350f;
+}
+
+.teacher-mode-btn.is-active:hover {
   border-color: rgba(180, 83, 9, 0.65);
   box-shadow:
     0 6px 18px rgba(217, 119, 6, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.75);
-}
-
-.teacher-mode-btn.is-active {
-  color: #042f2e;
-  border-color: rgba(45, 212, 191, 0.9);
-  background: linear-gradient(145deg, #5eead4 0%, #2dd4bf 55%, #14b8a6 100%);
-  box-shadow:
-    0 4px 0 rgba(15, 118, 110, 0.45),
-    0 8px 22px rgba(45, 212, 191, 0.4);
-}
-
-.teacher-mode-btn.is-active .teacher-mode-btn__label {
-  color: #042f2e;
 }
 
 .build-version-badge {
@@ -2081,8 +2187,12 @@ body.teacher-mode-active .slot {
     0 6px 20px rgba(0, 0, 0, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.35);
   overflow: hidden;
-  cursor: pointer;
+  cursor: default;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+body.bulk-pick-active .slot {
+  cursor: pointer;
 }
 
 .slot > * {
@@ -2124,6 +2234,16 @@ body.teacher-mode-active .slot {
   justify-content: center;
   padding: 1.75rem 0.5rem 0.5rem;
   min-height: 120px;
+  cursor: pointer;
+}
+
+.slot__stage:focus {
+  outline: 2px solid rgba(94, 234, 212, 0.75);
+  outline-offset: 2px;
+}
+
+.slot__stage:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .slot__stage::before {
@@ -2684,26 +2804,37 @@ body.teacher-mode-active .slot__life-heart.is-full:hover .slot__life-heart-icon 
     gap: 1rem;
   }
 
-  .mission-reminder-hud {
+  .dash-mission-stack {
+    position: static;
     width: 100%;
     max-width: 100%;
-    flex-wrap: wrap;
-    padding-right: 2rem;
+    margin: 0 auto 0.85rem;
+    align-items: stretch;
   }
 
+  .mission-score-hud {
+    width: 100%;
+    max-width: 100%;
+    align-self: stretch;
+  }
+
+  .mission-reminder-hud {
+    width: 100%;
+  }
+
+  .mission-reminder-hud__desc .daily-mission-modal__desc-line,
   .mission-reminder-hud__desc .daily-mission-modal__desc-text,
   .mission-reminder-hud__desc .daily-mission-modal__reward-inline {
-    display: block;
+    display: inline;
     white-space: normal;
-    margin-left: 0;
-    padding-left: 0;
-    border-left: none;
+    margin: 0;
+    padding: 0;
+    border: none;
   }
 
   .mission-reminder-hud__desc .daily-mission-modal__reward-inline {
-    margin-top: 0.25rem;
-    padding-top: 0.25rem;
-    border-top: 1px dashed rgba(217, 119, 6, 0.35);
+    font-weight: 900;
+    color: #c2410c;
   }
 
   .slot__footer {
@@ -2758,19 +2889,19 @@ body.teacher-mode-active .slot__life-heart.is-full:hover .slot__life-heart-icon 
 }
 
 .mission-score-hud {
-  position: fixed;
-  top: 3.25rem;
-  right: 0.85rem;
-  z-index: 1000;
-  width: min(168px, 38vw);
-  padding: 0.85rem 0.75rem 0.7rem;
-  border-radius: 18px;
+  position: static;
+  box-sizing: border-box;
+  width: 66.67%;
+  max-width: 66.67%;
+  align-self: flex-end;
+  padding: 0.5rem 0.45rem 0.45rem;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.38);
   backdrop-filter: blur(16px) saturate(1.4);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
   box-shadow:
-    0 12px 32px rgba(0, 0, 0, 0.28),
+    0 10px 24px rgba(0, 0, 0, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
@@ -2778,28 +2909,44 @@ body.teacher-mode-active .slot__life-heart.is-full:hover .slot__life-heart-icon 
   display: none;
 }
 
+.dash-mission-stack {
+  position: fixed;
+  top: 2.35rem;
+  right: 0.85rem;
+  z-index: 220;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  align-items: flex-end;
+  width: min(248px, 44vw);
+  max-width: 280px;
+}
+
+.dash-mission-stack[hidden] {
+  display: none;
+}
+
 .mission-reminder-hud {
   position: relative;
   box-sizing: border-box;
-  flex: 0 1 auto;
-  width: min(560px, calc(100vw - 2rem));
-  max-width: 560px;
-  min-height: 3.4rem;
+  width: 100%;
+  align-self: stretch;
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.55rem 2rem 0.55rem 0.85rem;
-  border-radius: 14px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  padding: 0.75rem 0.7rem 0.7rem;
+  border-radius: 16px;
   background: linear-gradient(
-    135deg,
-    rgba(255, 251, 235, 0.94) 0%,
-    rgba(254, 243, 199, 0.9) 55%,
-    rgba(253, 230, 138, 0.88) 100%
+    165deg,
+    rgba(255, 251, 235, 0.97) 0%,
+    rgba(254, 243, 199, 0.95) 55%,
+    rgba(253, 230, 138, 0.92) 100%
   );
-  border: 2px solid rgba(251, 191, 36, 0.55);
+  border: 2px solid rgba(251, 191, 36, 0.58);
   box-shadow:
-    0 8px 24px rgba(124, 45, 18, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+    0 12px 32px rgba(124, 45, 18, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 .mission-reminder-hud[hidden] {
@@ -2959,24 +3106,30 @@ body.teacher-mode-active .slot__life-heart.is-full:hover .slot__life-heart-icon 
   box-shadow:
     0 4px 16px rgba(124, 45, 18, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-.daily-mission-modal__desc-text {
-  display: block;
-  font-size: clamp(1.12rem, 3vw, 1.32rem);
+  font-size: clamp(1.05rem, 2.8vw, 1.22rem);
   font-weight: 800;
   line-height: 1.58;
   color: #9a3412;
 }
 
+.daily-mission-modal__desc-line {
+  display: inline;
+}
+
+.daily-mission-modal__desc-text {
+  display: inline;
+  font-weight: 800;
+  color: #9a3412;
+}
+
 .daily-mission-modal__reward-inline {
-  display: block;
-  margin-top: 0.65rem;
-  padding-top: 0.6rem;
-  border-top: 1px dashed rgba(217, 119, 6, 0.35);
-  font-size: clamp(1.05rem, 2.8vw, 1.22rem);
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  font-size: inherit;
   font-weight: 900;
-  line-height: 1.45;
+  line-height: inherit;
   color: #c2410c;
 }
 
@@ -3012,9 +3165,9 @@ body.teacher-mode-active .slot__life-heart.is-full:hover .slot__life-heart-icon 
 }
 
 .mission-reminder-hud__goal-btn {
-  flex-shrink: 0;
-  margin: 0;
-  padding: 0.45rem 0.85rem;
+  width: 100%;
+  margin-top: 0.15rem;
+  padding: 0.5rem 0.75rem;
   border: none;
   border-radius: 10px;
   font-size: clamp(0.82rem, 2vw, 0.92rem);
@@ -3042,10 +3195,176 @@ body.teacher-mode-active .slot__life-heart.is-full:hover .slot__life-heart-icon 
     0 4px 10px rgba(34, 197, 94, 0.3);
 }
 
+.mission-reminder-hud__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding-right: 1.5rem;
+}
+
+.mission-reminder-hud__label {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: rgba(124, 45, 18, 0.75);
+  flex: 1;
+  min-width: 0;
+}
+
+.mission-reminder-hud__pick-btn {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0.22rem 0.5rem;
+  border: 1.5px solid rgba(14, 116, 144, 0.45);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: #0c4a6e;
+  white-space: nowrap;
+  cursor: pointer;
+  background: linear-gradient(180deg, #e0f2fe 0%, #7dd3fc 100%);
+  box-shadow: 0 2px 8px rgba(14, 116, 144, 0.2);
+}
+
+.mission-reminder-hud__pick-btn:hover {
+  filter: brightness(1.05);
+}
+
+body:not(.teacher-mode-active) .mission-reminder-hud__pick-btn {
+  display: none;
+}
+
+.mission-pick-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 370;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(61, 26, 90, 0.52);
+  backdrop-filter: blur(8px);
+}
+
+.mission-pick-modal[hidden] {
+  display: none;
+}
+
+.mission-pick-modal__card {
+  width: min(92vw, 480px);
+  max-height: min(85vh, 640px);
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem 1.15rem 1.1rem;
+  border-radius: 18px;
+  background: linear-gradient(
+    165deg,
+    rgba(255, 253, 231, 0.98) 0%,
+    rgba(255, 236, 179, 0.97) 100%
+  );
+  border: 3px solid rgba(249, 115, 22, 0.35);
+  box-shadow: 0 24px 64px rgba(61, 26, 90, 0.32);
+}
+
+.mission-pick-modal__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #7c2d12;
+  text-align: center;
+}
+
+.mission-pick-modal__hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #9a3412;
+  text-align: center;
+}
+
+.mission-pick-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.mission-pick-item {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 2px solid rgba(217, 119, 6, 0.28);
+  border-radius: 12px;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.72);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.mission-pick-item:hover {
+  border-color: rgba(249, 115, 22, 0.55);
+  background: rgba(255, 255, 255, 0.95);
+  transform: translateY(-1px);
+}
+
+.mission-pick-item.is-current {
+  border-color: rgba(16, 185, 129, 0.65);
+  background: linear-gradient(
+    180deg,
+    rgba(209, 250, 229, 0.95) 0%,
+    rgba(167, 243, 208, 0.9) 100%
+  );
+}
+
+.mission-pick-item__title {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #7c2d12;
+}
+
+.mission-pick-item__desc {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.45;
+  color: #9a3412;
+}
+
+.mission-pick-item__badge {
+  display: inline-block;
+  margin-top: 0.35rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 900;
+  color: #065f46;
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.mission-pick-modal__close {
+  width: 100%;
+  color: #422006;
+  background: rgba(255, 255, 255, 0.94);
+  border: 2px solid rgba(120, 53, 15, 0.28);
+}
+
 .mission-reminder-hud__close {
   position: absolute;
-  top: 0.35rem;
-  right: 0.35rem;
+  top: 0.4rem;
+  right: 0.4rem;
   width: 1.45rem;
   height: 1.45rem;
   border: none;
@@ -3057,92 +3376,70 @@ body.teacher-mode-active .slot__life-heart.is-full:hover .slot__life-heart-icon 
   cursor: pointer;
 }
 
-.mission-reminder-hud__head {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0.1rem;
-  padding-right: 0.65rem;
-  border-right: 1px solid rgba(217, 119, 6, 0.28);
-  min-width: 5.5rem;
-}
-
-.mission-reminder-hud__label {
-  margin: 0;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  color: rgba(124, 45, 18, 0.75);
-  white-space: nowrap;
-}
-
 .mission-reminder-hud__title {
   margin: 0;
-  padding-right: 0;
-  font-size: clamp(0.92rem, 2vw, 1.05rem);
+  font-size: clamp(1rem, 2.4vw, 1.12rem);
   font-weight: 900;
-  line-height: 1.25;
+  line-height: 1.3;
   color: #7c2d12;
-  white-space: nowrap;
+  text-align: center;
 }
 
 .mission-reminder-hud__desc {
-  flex: 1;
-  min-width: 0;
+  flex: none;
+  width: 100%;
   margin: 0;
-  padding: 0.35rem 0.55rem;
-  text-align: left;
+  padding: 0.5rem 0.55rem;
+  text-align: center;
   background: rgba(255, 255, 255, 0.62);
   border: 1px solid rgba(217, 119, 6, 0.28);
   border-radius: 10px;
 }
 
+.mission-reminder-hud__desc .daily-mission-modal__desc-line,
 .mission-reminder-hud__desc .daily-mission-modal__desc-text {
   display: inline;
-  font-size: clamp(0.78rem, 1.8vw, 0.88rem);
+  font-size: clamp(0.78rem, 1.9vw, 0.9rem);
   font-weight: 800;
-  line-height: 1.45;
+  line-height: 1.5;
   color: #9a3412;
 }
 
 .mission-reminder-hud__desc .daily-mission-modal__reward-inline {
   display: inline;
-  margin-top: 0;
-  padding-top: 0;
-  margin-left: 0.35rem;
-  padding-left: 0.45rem;
-  border-top: none;
-  border-left: 1px dashed rgba(217, 119, 6, 0.35);
-  font-size: clamp(0.78rem, 1.8vw, 0.88rem);
+  margin: 0;
+  padding: 0;
+  border: none;
+  font-size: clamp(0.78rem, 1.9vw, 0.9rem);
   font-weight: 900;
   color: #c2410c;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .mission-score-hud__label {
-  margin: 0 0 0.25rem;
-  font-size: 0.72rem;
+  margin: 0 0 0.2rem;
+  font-size: 0.62rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   color: rgba(66, 32, 6, 0.85);
   text-align: center;
+  line-height: 1.25;
 }
 
 .mission-score-hud__score {
-  font-size: clamp(2.4rem, 8vw, 3rem);
+  font-size: clamp(1.5rem, 4.5vw, 2rem);
   font-weight: 900;
   line-height: 1;
   text-align: center;
   color: #c2410c;
-  text-shadow: 0 2px 12px rgba(249, 115, 22, 0.35);
-  margin-bottom: 0.55rem;
+  text-shadow: 0 2px 10px rgba(249, 115, 22, 0.32);
+  margin-bottom: 0.35rem;
 }
 
 .mission-score-hud__footer {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.3rem;
 }
 
 .mission-score-hud__track {
@@ -3162,15 +3459,16 @@ body.teacher-mode-active .slot__life-heart.is-full:hover .slot__life-heart-icon 
 
 .mission-score-hud__end {
   width: 100%;
-  padding: 0.35rem 0.5rem;
+  padding: 0.28rem 0.35rem;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   background: linear-gradient(180deg, #f87171, #dc2626);
   color: #fff;
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   font-weight: 800;
+  line-height: 1.2;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
+  box-shadow: 0 3px 10px rgba(220, 38, 38, 0.32);
 }
 
 .mission-outcome-modal {
