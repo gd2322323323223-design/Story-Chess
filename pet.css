@@ -110,6 +110,33 @@ body.evo-open {
   justify-content: center;
 }
 
+.stage__file-fallback {
+  padding: 1.25rem 1.5rem;
+  border-radius: 14px;
+  text-align: center;
+  background: rgba(15, 20, 25, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fde68a;
+  max-width: 22rem;
+}
+
+.stage__file-fallback p {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.stage__file-fallback p:last-child {
+  margin-bottom: 0;
+}
+
+.stage__file-fallback code {
+  padding: 0.08rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 0.82rem;
+}
+
 .stage__badge {
   position: absolute;
   top: 0.5rem;

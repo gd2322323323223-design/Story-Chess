@@ -11,6 +11,8 @@
   const DEFAULT_EMOJI = "😄";
   const SCORE_MIN = 0;
   const SCORE_MAX = 999;
+  const LIVES_MAX = 3;
+  const LIVES_DEFAULT = 3;
   const TEACHER_PASSWORD = "1234";
   const SITE_ACCESS_PASSWORD = "2756";
   const SITE_ACCESS_SESSION_KEY = "classroom-site-access-ok-v1";
@@ -116,6 +118,11 @@
   const gridEl = document.getElementById("dashboard-grid");
   const btnTeacherMode = document.getElementById("btn-teacher-mode");
 
+  function canLoadGlbAssets() {
+    const protocol = window.location.protocol;
+    return protocol === "http:" || protocol === "https:";
+  }
+
   let slots = [];
   let teacherMode = false;
   let animCycleTimeoutId = null;
@@ -180,6 +187,11 @@
     return Math.max(SCORE_MIN, Math.min(SCORE_MAX, n));
   }
 
+  function clampLives(v) {
+    const n = Number.isFinite(v) ? Math.floor(v) : LIVES_DEFAULT;
+    return Math.max(0, Math.min(LIVES_MAX, n));
+  }
+
   function createDefaultSlots() {
     return Array.from({ length: SLOT_COUNT }, function (_, i) {
       const id = i + 1;
@@ -190,6 +202,7 @@
         animal: animalForSlot(id),
         emoji: DEFAULT_EMOJI,
         score: 0,
+        lives: LIVES_DEFAULT,
       };
     });
   }
@@ -229,6 +242,8 @@
                 ? savedEmoji
                 : DEFAULT_EMOJI,
           score: savedScore,
+          lives:
+            typeof s.lives === "number" ? clampLives(s.lives) : LIVES_DEFAULT,
         };
       });
     } catch (e) {
@@ -258,6 +273,68 @@
     } catch (e) {
       console.warn("[動畫] 切換失敗：", animName, e);
     }
+  }
+
+  function createBeastModelViewer(slot, className, extraAttrs) {
+    const mv = document.createElement("model-viewer");
+    mv.className = className;
+    mv.src = "models/animal-" + slot.animal + ".glb";
+    mv.alt = slot.name + " 的神獸";
+    mv.setAttribute("autoplay", "");
+    mv.setAttribute("camera-orbit", "0deg 75deg auto");
+    mv.setAttribute("shadow-intensity", "0.8");
+    mv.setAttribute("environment-image", "neutral");
+    if (extraAttrs) {
+      Object.keys(extraAttrs).forEach(function (key) {
+        mv.setAttribute(key, extraAttrs[key]);
+      });
+    }
+    setViewerAnimation(mv, IDLE_ANIM);
+    return mv;
+  }
+
+  function createBeastFallback(slot, className) {
+    const wrap = document.createElement("div");
+    wrap.className = className + " slot__beast-fallback";
+    const label = ANIMAL_LABELS[slot.animal] || slot.animal;
+    wrap.innerHTML =
+      '<span class="slot__beast-fallback-icon" aria-hidden="true">🐾</span>' +
+      '<span class="slot__beast-fallback-label">' +
+      label +
+      "</span>";
+    wrap.title = "需透過本地伺服器開啟網頁，才能顯示 3D 神獸模型";
+    return wrap;
+  }
+
+  function appendHatchedBeast(parent, slot, viewerClass, extraAttrs) {
+    if (canLoadGlbAssets()) {
+      parent.appendChild(createBeastModelViewer(slot, viewerClass, extraAttrs));
+      return;
+    }
+    parent.appendChild(createBeastFallback(slot, viewerClass));
+  }
+
+  function showFileProtocolBanner() {
+    if (canLoadGlbAssets() || document.getElementById("file-protocol-banner")) return;
+
+    const banner = document.createElement("div");
+    banner.id = "file-protocol-banner";
+    banner.className = "file-protocol-banner";
+    banner.setAttribute("role", "alert");
+    banner.innerHTML =
+      '<p class="file-protocol-banner__text">' +
+      "<strong>偵測到 file:// 開啟方式</strong>：瀏覽器安全限制無法載入 3D 模型（CORS）。" +
+      "請雙擊專案資料夾內的 <code>serve.cmd</code>，再開啟 " +
+      "<code>http://127.0.0.1:8080</code>。" +
+      "</p>" +
+      '<button type="button" class="file-protocol-banner__close" aria-label="關閉提示">×</button>';
+    document.body.prepend(banner);
+
+    banner
+      .querySelector(".file-protocol-banner__close")
+      .addEventListener("click", function () {
+        banner.remove();
+      });
   }
 
   function forEachHatchedViewer(callback) {
@@ -615,6 +692,29 @@
       webAudioCtx.resume().catch(function () {});
     }
     return webAudioCtx;
+  }
+
+  /** 扣血：溫和低頻提醒音（200Hz 短正弦波） */
+  function playLifeWarningSound() {
+    const ctx = getWebAudioContext();
+    if (!ctx) return;
+
+    const t = ctx.currentTime;
+    const dur = 0.15;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(200, t);
+
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.2, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
   }
 
   /** 加分用的本地合成短促「叮！」（在沒有 Freesound 金鑰時使用） */
@@ -1837,18 +1937,11 @@
     beastCol.className = "lucky-winner-row__beast";
 
     if (slot.hatched) {
-      const mv = document.createElement("model-viewer");
-      mv.className = "lucky-winner-row__viewer";
-      mv.src = "models/animal-" + slot.animal + ".glb";
-      mv.alt = slot.name + " 的神獸";
-      mv.setAttribute("autoplay", "");
-      mv.setAttribute("auto-rotate", "");
-      mv.setAttribute("rotation-per-second", "18deg");
-      mv.setAttribute("camera-orbit", "0deg 75deg auto");
-      mv.setAttribute("shadow-intensity", "0.85");
-      mv.setAttribute("environment-image", "neutral");
-      setViewerAnimation(mv, IDLE_ANIM);
-      beastCol.appendChild(mv);
+      appendHatchedBeast(beastCol, slot, "lucky-winner-row__viewer", {
+        "auto-rotate": "",
+        "rotation-per-second": "18deg",
+        "shadow-intensity": "0.85",
+      });
     } else {
       const egg = document.createElement("div");
       egg.className = "lucky-winner-row__egg";
@@ -2221,6 +2314,110 @@
     setTimerMode("stopwatch");
   }
 
+  function deductSlotLife(slotId) {
+    if (!teacherMode && !ensureTeacherModeOn()) return;
+    const slot = getSlotById(slotId);
+    if (!slot || slot.lives <= 0) return;
+
+    slot.lives = clampLives(slot.lives - 1);
+    saveSlots();
+    updateSlotLifeDisplay(slot);
+    playLifeWarningSound();
+  }
+
+  function restoreSlotLife(slotId) {
+    if (!teacherMode && !ensureTeacherModeOn()) return;
+    const slot = getSlotById(slotId);
+    if (!slot || slot.lives > 0) return;
+
+    slot.lives = LIVES_DEFAULT;
+    saveSlots();
+    updateSlotLifeDisplay(slot);
+  }
+
+  function ensureSlotLifeHearts(livesEl, slotId) {
+    const existing = livesEl.querySelectorAll(".slot__life-heart");
+    if (existing.length === LIVES_MAX) return existing;
+
+    livesEl.textContent = "";
+    for (let i = 0; i < LIVES_MAX; i++) {
+      const heart = document.createElement("button");
+      heart.type = "button";
+      heart.className = "slot__life-heart is-full";
+      heart.dataset.lifeIndex = String(i);
+      heart.innerHTML =
+        '<span class="slot__life-heart-icon" aria-hidden="true">♥</span>';
+      heart.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        if (!heart.classList.contains("is-full")) return;
+        deductSlotLife(slotId);
+      });
+      livesEl.appendChild(heart);
+    }
+    return livesEl.querySelectorAll(".slot__life-heart");
+  }
+
+  function syncSlotLifeHeartStates(livesEl, slot) {
+    const hearts = ensureSlotLifeHearts(livesEl, slot.id);
+    hearts.forEach(function (heart, i) {
+      const isFull = i < slot.lives;
+      heart.classList.toggle("is-full", isFull);
+      heart.classList.toggle("is-empty", !isFull);
+      heart.hidden = false;
+      heart.style.display = "";
+      heart.setAttribute(
+        "aria-label",
+        isFull
+          ? "扣減生命值（目前 " + slot.lives + "）"
+          : "已失去的生命值"
+      );
+      heart.disabled = !teacherMode || !isFull;
+    });
+
+    let restoreBtn = livesEl.querySelector(".slot__life-restore");
+    if (slot.lives === 0 && teacherMode) {
+      if (!restoreBtn) {
+        restoreBtn = document.createElement("button");
+        restoreBtn.type = "button";
+        restoreBtn.className = "slot__life-restore";
+        restoreBtn.textContent = "補血";
+        restoreBtn.setAttribute(
+          "aria-label",
+          "恢復生命值至 " + LIVES_DEFAULT
+        );
+        restoreBtn.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          restoreSlotLife(slot.id);
+        });
+        livesEl.appendChild(restoreBtn);
+      }
+    } else if (restoreBtn) {
+      restoreBtn.remove();
+    }
+  }
+
+  function updateSlotLifeDisplay(slot) {
+    const el = document.querySelector('.slot[data-slot-id="' + slot.id + '"]');
+    if (!el) return;
+    const livesEl = el.querySelector(".slot__lives");
+    if (livesEl) syncSlotLifeHeartStates(livesEl, slot);
+    el.classList.toggle("is-sleeping", slot.lives === 0);
+  }
+
+  function renderSlotLives(el, slot) {
+    let livesEl = el.querySelector(".slot__lives");
+    if (!livesEl) {
+      livesEl = document.createElement("div");
+      livesEl.className = "slot__lives";
+      livesEl.setAttribute("aria-label", "生命值");
+      const footer = el.querySelector(".slot__footer");
+      if (footer) footer.before(livesEl);
+      else el.appendChild(livesEl);
+    }
+
+    syncSlotLifeHeartStates(livesEl, slot);
+  }
+
   function renderSlotElement(slot) {
     let el = document.querySelector('.slot[data-slot-id="' + slot.id + '"]');
     if (!el) {
@@ -2236,6 +2433,7 @@
         '  <button type="button" class="slot__teacher-btn slot__teacher-btn--egg" title="變回蛋" aria-label="變回蛋">🥚</button>' +
         "</div>" +
         '<div class="slot__stage"></div>' +
+        '<div class="slot__lives" aria-label="生命值"></div>' +
         '<div class="slot__footer">' +
         '  <button type="button" class="slot__footer-part slot__footer-part--emoji" aria-label="狀態表情"></button>' +
         '  <div class="slot__footer-part slot__footer-part--name"></div>' +
@@ -2302,6 +2500,9 @@
       };
     }
 
+    renderSlotLives(el, slot);
+    el.classList.toggle("is-sleeping", slot.lives === 0);
+
     if (quickMenu) {
       quickMenu.innerHTML = "";
       QUICK_ADD_VALUES.forEach(function (delta) {
@@ -2324,16 +2525,7 @@
     stage.innerHTML = "";
 
     if (slot.hatched) {
-      const mv = document.createElement("model-viewer");
-      mv.className = "slot__viewer";
-      mv.src = "models/animal-" + slot.animal + ".glb";
-      mv.alt = slot.name + " 的神獸";
-      mv.setAttribute("autoplay", "");
-      mv.setAttribute("camera-orbit", "0deg 75deg auto");
-      mv.setAttribute("shadow-intensity", "0.8");
-      mv.setAttribute("environment-image", "neutral");
-      setViewerAnimation(mv, IDLE_ANIM);
-      stage.appendChild(mv);
+      appendHatchedBeast(stage, slot, "slot__viewer");
     } else {
       const egg = document.createElement("div");
       egg.className = "slot__egg";
@@ -2673,6 +2865,7 @@
     if (!gridEl) return;
     if (!ensureSiteAccess()) return;
 
+    showFileProtocolBanner();
     loadSlots();
     loadGroups();
 

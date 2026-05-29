@@ -698,8 +698,21 @@
 
   function boot() {
     if (viewer) {
-      viewer.src = modelSrc;
-      viewer.alt = (dashSlot.name || "學生") + " 的神獸";
+      if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+        viewer.src = modelSrc;
+        viewer.alt = (dashSlot.name || "學生") + " 的神獸";
+      } else {
+        viewer.hidden = true;
+        const stageWrap = document.getElementById("stage-wrap");
+        if (stageWrap && !stageWrap.querySelector(".stage__file-fallback")) {
+          const fallback = document.createElement("div");
+          fallback.className = "stage__file-fallback";
+          fallback.innerHTML =
+            "<p><strong>無法載入 3D 模型</strong></p>" +
+            "<p>請雙擊 <code>serve.cmd</code> 後，以 <code>http://127.0.0.1:8080</code> 開啟。</p>";
+          stageWrap.appendChild(fallback);
+        }
+      }
     }
 
     loadState();

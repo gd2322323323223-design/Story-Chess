@@ -1571,6 +1571,186 @@ body.teacher-mode-active .slot__teacher-tools {
   pointer-events: none;
 }
 
+.slot__lives {
+  display: inline-flex;
+  align-self: flex-end;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  margin: 0 0.45rem 0.1rem;
+  padding: 0;
+  z-index: 3;
+  min-height: auto;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.slot__life-heart {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  line-height: 1;
+  cursor: default;
+  transition: transform 0.14s ease, filter 0.2s ease;
+}
+
+.slot__life-heart-icon {
+  display: block;
+  font-size: 1.48rem;
+  line-height: 1;
+  font-family: "Segoe UI Symbol", "Apple Color Emoji", sans-serif;
+  transition: color 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
+}
+
+.slot__life-heart.is-full .slot__life-heart-icon {
+  color: #ff4757;
+  filter: drop-shadow(0 1px 3px rgba(255, 71, 87, 0.75));
+}
+
+body.teacher-mode-active .slot__life-heart.is-full {
+  cursor: pointer;
+}
+
+body.teacher-mode-active .slot__life-heart.is-full:hover {
+  transform: scale(1.2);
+}
+
+body.teacher-mode-active .slot__life-heart.is-full:hover .slot__life-heart-icon {
+  filter: drop-shadow(0 0 8px rgba(255, 71, 87, 0.85));
+}
+
+.slot__life-heart.is-empty {
+  pointer-events: none;
+  filter: grayscale(100%);
+  opacity: 0.35;
+  color: #bbb !important;
+}
+
+.slot__life-heart.is-empty .slot__life-heart-icon {
+  color: #ccc !important;
+  filter: none;
+  opacity: 1;
+}
+
+.slot__life-restore {
+  margin-left: 0.3rem;
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: linear-gradient(
+    180deg,
+    rgba(254, 242, 242, 0.98) 0%,
+    rgba(254, 226, 226, 0.95) 100%
+  );
+  color: #991b1b;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(153, 27, 27, 0.15);
+}
+
+.slot__life-restore:hover {
+  filter: brightness(1.04);
+}
+
+.slot.is-sleeping {
+  filter: grayscale(80%);
+  opacity: 0.6;
+}
+
+.slot.is-sleeping:hover {
+  transform: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.slot__beast-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  height: 120px;
+  color: rgba(255, 255, 255, 0.88);
+  text-align: center;
+  pointer-events: none;
+}
+
+.slot__beast-fallback-icon {
+  font-size: 2rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
+}
+
+.slot__beast-fallback-label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  opacity: 0.9;
+}
+
+.lucky-winner-row__viewer.slot__beast-fallback {
+  min-height: 220px;
+  height: auto;
+}
+
+.file-protocol-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 500;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  background: linear-gradient(90deg, #7f1d1d 0%, #991b1b 100%);
+  color: #fff7ed;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
+}
+
+.file-protocol-banner__text {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.file-protocol-banner__text code {
+  padding: 0.08rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.25);
+  font-size: 0.78rem;
+}
+
+.file-protocol-banner__close {
+  flex-shrink: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.file-protocol-banner ~ .build-version-badge,
+.file-protocol-banner ~ .teacher-mode-btn {
+  margin-top: 2.5rem;
+}
+
 .slot__footer {
   position: relative;
   z-index: 3;
